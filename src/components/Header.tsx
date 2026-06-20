@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CATEGORY_ORDER, CATEGORIES } from "@/lib/categories";
 import { LiveScores } from "./LiveScores";
+import { SearchBox } from "./SearchBox";
 
 const NAV = [
   { href: "/", label: "ראשי" },
@@ -29,24 +30,6 @@ export function Header() {
       {/* פס ניווט - חיפוש מימין, קטגוריות שוות, LIVE משמאל */}
       <nav className="border-b border-line bg-white">
         <div className="mx-auto flex max-w-site items-stretch px-1">
-          <button
-            type="button"
-            aria-label="חיפוש"
-            className="flex shrink-0 items-center gap-1.5 px-3 text-sm font-semibold text-ink-muted hover:text-brand"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              className="h-4 w-4"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="11" cy="11" r="7" />
-              <path d="M21 21l-4.3-4.3" strokeLinecap="round" />
-            </svg>
-            <span className="hidden sm:inline">חיפוש</span>
-          </button>
-
           <div className="flex flex-1 items-stretch overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {NAV.map((item) => (
               <Link
@@ -59,10 +42,8 @@ export function Header() {
             ))}
           </div>
 
-          <span className="flex shrink-0 items-center gap-1.5 px-3 text-sm font-extrabold text-brand">
-            <span className="h-1.5 w-1.5 animate-live rounded-full bg-brand" />
-            LIVE
-          </span>
+          {/* חיפוש - בצד שמאל */}
+          <SearchBox />
         </div>
       </nav>
     </header>
