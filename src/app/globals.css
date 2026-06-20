@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-slate-50 text-ink antialiased;
+}
+
+/* גוף כתבה: שמירה על שורות ריקות כפסקאות */
+.article-body p {
+  @apply mb-4 leading-8 text-slate-700;
+}
+
+.article-body p:last-child {
+  @apply mb-0;
+}
+
+/* קו תחתון אדום עדין לקישורי ניווט פעילים */
+.nav-link-active {
+  @apply text-brand;
+}
+
+::selection {
+  @apply bg-brand/20;
+}
