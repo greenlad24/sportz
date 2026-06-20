@@ -8,8 +8,9 @@ import { ForYou } from "@/components/ForYou";
 import { AdSlot } from "@/components/AdSlot";
 import type { Article } from "@/lib/types";
 
-// ISR: HTML סטטי מהיר. מתרענן כשמנוע הניוז מוסיף כתבות (on-demand), וגיבוי כל 5 דק'.
-export const revalidate = 300;
+// דינמי: מרונדר מהאחסון החי בכל בקשה, כך שכתבות חדשות מהמנוע מופיעות מיד.
+// (ISR/revalidate לא הציג תוכן חי באמינות בפריסת standalone, ולכן עברנו לדינמי.)
+export const dynamic = "force-dynamic";
 
 function rank(articles: Article[]): Article[] {
   return [...articles].sort((a, b) => {
