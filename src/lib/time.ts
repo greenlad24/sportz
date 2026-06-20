@@ -37,6 +37,22 @@ export function timeAgoHe(iso: string): string {
   }).format(then);
 }
 
+/** "16:15 - 20.06.26" - זמן + תאריך קצר לשורות הכתבות */
+export function formatShortHe(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "";
+  const time = new Intl.DateTimeFormat("he-IL", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(t);
+  const date = new Intl.DateTimeFormat("he-IL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  }).format(t);
+  return `${time} - ${date}`;
+}
+
 export function formatDateHe(iso: string): string {
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return "";

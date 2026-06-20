@@ -3,6 +3,7 @@ import { getArticles, getUpdates } from "@/lib/store";
 import { CATEGORY_ORDER, CATEGORIES } from "@/lib/categories";
 import { FeaturedArticle } from "@/components/FeaturedArticle";
 import { ArticleCard } from "@/components/ArticleCard";
+import { ArticleRow } from "@/components/ArticleRow";
 import { HeadlineList } from "@/components/HeadlineList";
 import { HourlyUpdates } from "@/components/HourlyUpdates";
 import { ForYou } from "@/components/ForYou";
@@ -59,7 +60,7 @@ export default async function HomePage() {
   const mainStory = rank(recent.length > 0 ? recent : articles)[0];
 
   const usedIds = new Set([mainStory?.id]);
-  const latest = articles.filter((a) => !usedIds.has(a.id)).slice(0, 6);
+  const latest = articles.filter((a) => !usedIds.has(a.id)).slice(0, 10);
   const latestIds = new Set(latest.map((a) => a.id));
   const mostRead = ranked
     .filter((a) => !usedIds.has(a.id) && !latestIds.has(a.id))
@@ -91,9 +92,9 @@ export default async function HomePage() {
         <section className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <SectionHeading>מבזקים אחרונים</SectionHeading>
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <div className="border-t border-line">
               {latest.map((a) => (
-                <ArticleCard key={a.id} article={a} />
+                <ArticleRow key={a.id} article={a} />
               ))}
             </div>
           </div>
