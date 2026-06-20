@@ -33,7 +33,7 @@ export function ForYou({ excludeId }: { excludeId?: string }) {
     <section>
       <div className="mb-4 flex items-center gap-2.5 border-b border-line pb-2">
         <span className="h-6 w-1.5 rounded bg-brand" />
-        <h2 className="text-xl font-extrabold text-ink">בשבילך</h2>
+        <h2 className="text-xl font-extrabold text-ink">המלצות לקריאה</h2>
         <span className="text-xs font-normal text-ink-muted">
           מותאם לפי מה שקראתם
         </span>
