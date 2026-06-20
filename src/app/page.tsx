@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { getArticles } from "@/lib/store";
+import { getArticles, getUpdates } from "@/lib/store";
 import { CATEGORY_ORDER, CATEGORIES } from "@/lib/categories";
 import { FeaturedArticle } from "@/components/FeaturedArticle";
 import { ArticleCard } from "@/components/ArticleCard";
 import { HeadlineList } from "@/components/HeadlineList";
-import { BreakingTicker } from "@/components/BreakingTicker";
+import { HourlyUpdates } from "@/components/HourlyUpdates";
+import { ForYou } from "@/components/ForYou";
 import type { Article } from "@/lib/types";
 
 // ISR: HTML סטטי מהיר. מתרענן כשמנוע הניוז מוסיף כתבות (on-demand), וגיבוי כל 5 דק'.
@@ -47,43 +48,49 @@ function SectionHeading({
 }
 
 export default async function HomePage() {
-  const articles = await getArticles();
+  const [articles, updates] = await Promise.all([getArticles(), getUpdates(14)]);
   const ranked = rank(articles);
 
-  const lead = ranked[0];
-  const rail = ranked.slice(1, 6); // "עוד בכותרות"
-  const topIds = new Set([lead?.id, ...rail.map((a) => a.id)]);
+  // "סיפור השעה" - הכתבה המעניינת ביותר מבין אלו שנוצרו בשעה האחרונה (אחרת - הבולטת מכולן)
+  const hourAgo = Date.now() - 60 * 60 * 1000;
+  const recent = articles.filter(
+    (a) => new Date(a.createdAt).getTime() >= hourAgo,
+  );
+  const mainStory = rank(recent.length > 0 ? recent : articles)[0];
 
-  const remaining = articles.filter((a) => !topIds.has(a.id));
-  const latest = remaining.slice(0, 6); // עמודת מבזקים מרכזית
+  const usedIds = new Set([mainStory?.id]);
+  const latest = articles.filter((a) => !usedIds.has(a.id)).slice(0, 6);
   const latestIds = new Set(latest.map((a) => a.id));
-
   const mostRead = ranked
-    .filter((a) => !topIds.has(a.id) && !latestIds.has(a.id))
-    .slice(0, 6); // "הנקראות ביותר"
+    .filter((a) => !usedIds.has(a.id) && !latestIds.has(a.id))
+    .slice(0, 6);
 
   return (
     <div className="mx-auto max-w-site px-4 py-5">
-      {/* רצועת מבזקים */}
-      <BreakingTicker items={ranked.slice(0, 8)} />
-
-      {/* בלוק כותרות ראשי: כתבה מובילה + רשימת כותרות */}
-      {lead && (
+      {/* בלוק העל: מימין סיפור השעה + "בשבילך", משמאל עדכוני השעה */}
+      {mainStory && (
         <section className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <FeaturedArticle article={lead} />
-          </div>
-          <aside className="rounded-xl border border-line bg-white p-4">
-            <div className="mb-3 flex items-center gap-2.5 border-b border-line pb-2">
-              <span className="h-5 w-1.5 rounded bg-brand" />
-              <h2 className="text-lg font-extrabold text-ink">עוד בכותרות</h2>
+          <div className="flex flex-col gap-8 lg:col-span-2">
+            <div>
+              <div className="mb-2">
+                <span className="rounded bg-brand px-2 py-0.5 text-xs font-extrabold text-white">
+                  סיפור השעה
+                </span>
+              </div>
+              <FeaturedArticle article={mainStory} />
             </div>
-            <HeadlineList items={rail} />
+
+            {/* המלצות מותאמות אישית (localStorage) */}
+            <ForYou excludeId={mainStory.id} />
+          </div>
+
+          <aside className="lg:col-span-1">
+            <HourlyUpdates updates={updates} />
           </aside>
         </section>
       )}
 
-      {/* פיד מרכזי + סרגל "הנקראות ביותר" */}
+      {/* פיד מרכזי + "הנקראות ביותר" */}
       {latest.length > 0 && (
         <section className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
@@ -109,7 +116,7 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* בלוקים לפי קטגוריה: כתבה מובילה + רשימת כותרות (בסגנון פורטל) */}
+      {/* בלוקים לפי קטגוריה */}
       {CATEGORY_ORDER.map((cat) => {
         const c = CATEGORIES[cat];
         const items = articles.filter((a) => a.category === cat).slice(0, 5);

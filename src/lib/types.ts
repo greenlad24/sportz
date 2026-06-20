@@ -44,3 +44,22 @@ export interface GeneratedArticle {
   sourceUrl: string;
   publishedAt: string;
 }
+
+/** "עדכון" = עובדה מאומתת/מקור שעליו מבוססות הכתבות (הרכב, תוצאה, דיווח, שמועה) */
+export interface GeneratedUpdate {
+  category: Category;
+  text: string;
+}
+
+export interface Update {
+  id: string;
+  category: Category;
+  text: string;
+  createdAt: string; // ISO
+}
+
+/** מבנה הפלט המלא של ה-LLM */
+export interface LlmOutput {
+  articles: GeneratedArticle[];
+  updates: GeneratedUpdate[];
+}

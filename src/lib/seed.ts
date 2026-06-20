@@ -1,4 +1,4 @@
-import type { Article } from "./types";
+import type { Article, Update } from "./types";
 import { slugify, hashId } from "./utils";
 
 // כתבות לדוגמה שמוצגות לפני שמנוע הניוז רץ בפעם הראשונה.
@@ -85,3 +85,22 @@ export const SEED_ARTICLES: Article[] = [
     publishedAt: hoursAgo(12),
   }),
 ];
+
+// עדכוני שעה לדוגמה (יוחלפו בעדכונים אמיתיים מהמנוע)
+const minutesAgo = (m: number) => new Date(now - m * 60000).toISOString();
+
+const rawUpdates: Omit<Update, "id">[] = [
+  { category: "avdija", text: "דיווח: אבדיה סיים את המשחק מול דאלאס עם 24 נקודות, 7 ריבאונדים ו-5 אסיסטים.", createdAt: minutesAgo(8) },
+  { category: "avdija", text: "פורטלנד גברה על דאלאס 112:108 - ניצחון שלישי ברציפות.", createdAt: minutesAgo(15) },
+  { category: "israeli_basketball", text: "תוצאה: מכבי ת\"א מובילה על אולימפיאקוס 74:78 בסוף הרבע השלישי.", createdAt: minutesAgo(20) },
+  { category: "israeli_basketball", text: "הרכב פתיחה של הפועל ת\"א פורסם לקראת המשחק מול מכבי חיפה.", createdAt: minutesAgo(28) },
+  { category: "world_football", text: "שמועה: דיווח בספרד על התעניינות מועדון מליגת האלופות בכוכב צעיר.", createdAt: minutesAgo(34) },
+  { category: "avdija", text: "מאמן הבלייזרס בראיון: \"אבדיה הפך לאחד השחקנים החשובים שלנו\".", createdAt: minutesAgo(41) },
+  { category: "israeli_basketball", text: "הפועל ירושלים אישרה: שחקן חיזוק חדש ייחתם בימים הקרובים.", createdAt: minutesAgo(50) },
+  { category: "world_football", text: "תוצאה: ערב הנוקאאוט בליגת האלופות נפתח בתיקו 1:1.", createdAt: minutesAgo(58) },
+];
+
+export const SEED_UPDATES: Update[] = rawUpdates.map((u) => ({
+  ...u,
+  id: hashId(u.text),
+}));

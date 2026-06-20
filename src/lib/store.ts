@@ -1,13 +1,16 @@
 import { promises as fs } from "fs";
 import path from "path";
-import type { Article } from "./types";
-import { SEED_ARTICLES } from "./seed";
+import type { Article, Update } from "./types";
+import { SEED_ARTICLES, SEED_UPDATES } from "./seed";
 
 const KEY_ARTICLES = "sportz:articles";
 const KEY_LINKS = "sportz:links";
+const KEY_UPDATES = "sportz:updates";
 const MAX_ARTICLES = 200;
 const MAX_LINKS = 4000;
+const MAX_UPDATES = 80;
 const LINK_TTL_HOURS = 96; // כמה זמן לזכור שמקור כבר עובד (מונע עיבוד חוזר)
+const UPDATE_TTL_HOURS = 8; // "עדכוני השעה" - שומרים עדכונים אחרונים בלבד
 
 const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
 const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -146,6 +149,43 @@ export async function addProcessedLinks(links: string[]): Promise<void> {
     .slice(0, MAX_LINKS);
 
   await backendSet(KEY_LINKS, "links.json", recs);
+}
+
+// ── עדכוני השעה (עובדות גולמיות שעליהן מבוססות הכתבות) ─────────────
+
+/** העדכונים האחרונים (קריאה ממוטמחת לעמודים), ממוינים מהחדש לישן. */
+export async function getUpdates(limit = 15): Promise<Update[]> {
+  const stored = await backendGet<Update[]>(KEY_UPDATES, "updates.json", false);
+  const recs = stored && stored.length > 0 ? stored : SEED_UPDATES;
+  const cutoff = Date.now() - UPDATE_TTL_HOURS * 36e5;
+  return recs
+    .filter((u) => new Date(u.createdAt).getTime() >= cutoff)
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    )
+    .slice(0, limit);
+}
+
+/** מוסיף עדכונים חדשים, מסיר ישנים (TTL) וחותך לכמות מקסימלית. */
+export async function addUpdates(updates: Update[]): Promise<void> {
+  if (updates.length === 0) return;
+  const cutoff = Date.now() - UPDATE_TTL_HOURS * 36e5;
+  const existing =
+    (await backendGet<Update[]>(KEY_UPDATES, "updates.json", true)) ?? [];
+
+  const seen = new Set(existing.map((u) => u.id));
+  const fresh = updates.filter((u) => !seen.has(u.id));
+
+  const merged = [...fresh, ...existing]
+    .filter((u) => new Date(u.createdAt).getTime() >= cutoff)
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    )
+    .slice(0, MAX_UPDATES);
+
+  await backendSet(KEY_UPDATES, "updates.json", merged);
 }
 
 export const storageMode = useKv ? "upstash" : "file";

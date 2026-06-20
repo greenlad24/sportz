@@ -1,4 +1,4 @@
-import type { Article, Category, GeneratedArticle } from "./types";
+import type { Article, Category, GeneratedArticle, Update } from "./types";
 import { SOURCES } from "./sources";
 import { fetchAllSources } from "./rss";
 import { scrapeIsraeliSites } from "./scrape";
@@ -8,6 +8,7 @@ import {
   mergeArticles,
   getProcessedLinks,
   addProcessedLinks,
+  addUpdates,
 } from "./store";
 import { hashId, slugify } from "./utils";
 import { CATEGORIES } from "./categories";
@@ -106,10 +107,10 @@ export async function runRefresh(): Promise<RefreshResult> {
     0,
   );
 
-  // 3) יצירת כתבות בעברית (קריאה אחת מאוחדת ל-LLM) - רק אם יש תוכן חדש.
+  // 3) יצירת כתבות + עדכוני השעה (קריאה אחת מאוחדת ל-LLM) - רק אם יש תוכן חדש.
   const skippedLlm = candidateCount === 0;
   const generated = skippedLlm
-    ? []
+    ? { articles: [], updates: [] }
     : await generateArticles(candidates, targets);
 
   // 3.1) מסמנים את כל הקישורים ששלחנו כ"עובדו" (גם אם לא נכתבה כתבה מכולם),
@@ -121,8 +122,20 @@ export async function runRefresh(): Promise<RefreshResult> {
     await addProcessedLinks(sentLinks);
   }
 
+  // 3.2) שמירת עדכוני השעה (העובדות הגולמיות שעליהן מבוססות הכתבות)
+  if (generated.updates.length > 0) {
+    const now = new Date().toISOString();
+    const updateObjs: Update[] = generated.updates.map((u) => ({
+      id: hashId(u.text),
+      category: u.category,
+      text: u.text.trim(),
+      createdAt: now,
+    }));
+    await addUpdates(updateObjs);
+  }
+
   // 4) המרה לכתבות ומיזוג לאחסון (הסרת כפילויות מול הקיים)
-  const articles = generated.map(toArticle).filter((a) => a.headline);
+  const articles = generated.articles.map(toArticle).filter((a) => a.headline);
   const added = articles.length > 0 ? await mergeArticles(articles) : [];
 
   const perCategory: Record<Category, number> = {
@@ -135,7 +148,7 @@ export async function runRefresh(): Promise<RefreshResult> {
   return {
     fetched: raw.length,
     candidates: candidateCount,
-    generated: generated.length,
+    generated: generated.articles.length,
     added: added.length,
     skippedLlm,
     perCategory,

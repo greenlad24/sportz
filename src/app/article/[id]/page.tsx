@@ -6,6 +6,7 @@ import { CATEGORIES } from "@/lib/categories";
 import { CategoryChip } from "@/components/CategoryChip";
 import { ArticleImage } from "@/components/ArticleImage";
 import { ArticleCard } from "@/components/ArticleCard";
+import { ViewTracker } from "@/components/ViewTracker";
 import { formatDateHe } from "@/lib/time";
 import { SITE, absoluteUrl } from "@/lib/site";
 
@@ -86,6 +87,7 @@ export default async function ArticlePage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+      <ViewTracker category={article.category} tags={article.tags} />
 
       <nav className="mb-4 text-sm text-ink-muted">
         <Link href="/" className="hover:text-brand">
