@@ -99,25 +99,32 @@ export default async function HomePage() {
       {/* בלוקים לפי קטגוריה */}
       {CATEGORY_ORDER.map((cat) => {
         const c = CATEGORIES[cat];
-        const items = articles.filter((a) => a.category === cat).slice(0, 5);
+        const items = articles.filter((a) => a.category === cat).slice(0, 9);
         if (items.length === 0) return null;
         const blockLead = items[0];
-        const blockRest = items.slice(1, 5);
+        const blockRest = items.slice(1);
         return (
           <section key={cat} className="mb-10">
             <SectionHeading bar={c.bar} href={`/category/${c.slug}`}>
               {c.label}
             </SectionHeading>
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <FeaturedArticle article={blockLead} fill />
-              {blockRest.length > 0 && (
-                <div className="border-t border-line">
+
+            {/* כתבה ראשית ברוחב מלא (עיצוב הסיפור הראשי) */}
+            <FeaturedArticle article={blockLead} tall />
+
+            {/* פיד שורות (697px) + שטח פרסום (235px) - כמו "מבזקים אחרונים" */}
+            {blockRest.length > 0 && (
+              <div className="mt-6 flex flex-col gap-6 lg:flex-row">
+                <div className="min-w-0 flex-1 border-t border-line">
                   {blockRest.map((a) => (
                     <ArticleRow key={a.id} article={a} />
                   ))}
                 </div>
-              )}
-            </div>
+                <aside className="lg:w-[235px] lg:shrink-0">
+                  <AdSlot className="sticky top-28 min-h-[600px]" />
+                </aside>
+              </div>
+            )}
           </section>
         );
       })}
