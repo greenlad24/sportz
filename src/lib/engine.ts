@@ -67,7 +67,9 @@ function validIso(value: string): string {
 export async function runRefresh(): Promise<RefreshResult> {
   const startedAt = Date.now();
 
-  const perRun = Number(process.env.ARTICLES_PER_RUN || 10);
+  // ברירת מחדל נמוכה יחסית: כתבות מעמיקות (5-7 דק') יקרות בטוקנים, וכולן
+  // נכתבות בקריאה אחת. עדיף מעט כתבות מלאות מאשר הרבה קצרות. ניתן לשנות ב-ENV.
+  const perRun = Number(process.env.ARTICLES_PER_RUN || 5);
   const lookbackHours = Number(process.env.LOOKBACK_HOURS || 48);
   const targets = computeTargets(perRun);
 
@@ -80,10 +82,12 @@ export async function runRefresh(): Promise<RefreshResult> {
 
   // 2) סינון חינמי: ניקוד רלוונטיות + טריות + הסרת כפילויות
   //    שולחים ל-Claude מעט יותר מועמדים מהיעד כדי לתת לו ממה לבחור.
+  // שולחים הרבה יותר מועמדים מהיעד: כך ל-Claude יש כמה מקורות על אותו אירוע
+  // להצליב ולאחד לכתבה אחת מקיפה (ולא רק חומר לבחירה).
   const perCategoryCap: Record<Category, number> = {
-    avdija: targets.avdija + 4,
-    israeli_basketball: targets.israeli_basketball + 3,
-    world_football: targets.world_football + 2,
+    avdija: targets.avdija + 8,
+    israeli_basketball: targets.israeli_basketball + 6,
+    world_football: targets.world_football + 5,
   };
   const selected = selectCandidates(raw, {
     lookbackHours,
