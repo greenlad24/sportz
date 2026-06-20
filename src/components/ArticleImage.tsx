@@ -2,9 +2,9 @@ import { CATEGORIES } from "@/lib/categories";
 import type { Category } from "@/lib/types";
 
 const GRADIENTS: Record<Category, string> = {
-  avdija: "from-brand to-red-900",
-  israeli_basketball: "from-amber-400 to-orange-700",
-  world_football: "from-emerald-500 to-emerald-900",
+  avdija: "from-brand to-[#6e2018]",
+  israeli_basketball: "from-ochre to-[#7a531a]",
+  world_football: "from-olive to-[#3f5325]",
 };
 
 /**

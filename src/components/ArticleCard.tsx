@@ -6,7 +6,7 @@ import { timeAgoHe } from "@/lib/time";
 
 export function ArticleCard({ article }: { article: Article }) {
   return (
-    <article className="group overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:shadow-md">
+    <article className="group overflow-hidden rounded-xl border border-line bg-white transition hover:shadow-md hover:shadow-ink/5">
       <Link href={`/article/${article.slug}`} className="block">
         <ArticleImage
           category={article.category}

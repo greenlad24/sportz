@@ -57,7 +57,7 @@ export default async function CategoryPage({
       </header>
 
       {items.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center text-ink-muted">
+        <p className="rounded-lg border border-dashed border-line bg-white p-8 text-center text-ink-muted">
           אין כרגע כתבות בקטגוריה זו. המנוע מתעדכן כל 5 דקות - חזרו בקרוב.
         </p>
       ) : (

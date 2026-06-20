@@ -9,6 +9,7 @@ export interface CategoryMeta {
   /** משקל היעד בתמהיל התוכן (אחוז) */
   targetShare: number;
   accent: string; // צבע (tailwind class) לצ'יפ
+  bar: string; // צבע (tailwind class) לפס כותרת המקטע
 }
 
 export const CATEGORIES: Record<Category, CategoryMeta> = {
@@ -21,6 +22,7 @@ export const CATEGORIES: Record<Category, CategoryMeta> = {
       "כל מה שקורה עם דני אבדיה ופורטלנד טרייל בלייזרס - עדכונים, שמועות ועובדות ממקורות בארץ ובארה\"ב.",
     targetShare: 70,
     accent: "bg-brand text-white",
+    bar: "bg-brand",
   },
   israeli_basketball: {
     slug: "israeli-basketball",
@@ -30,7 +32,8 @@ export const CATEGORIES: Record<Category, CategoryMeta> = {
     description:
       "מכבי תל אביב, הפועל תל אביב, הפועל ירושלים - תוצאות, קלעים מובילים, שמועות והעברות.",
     targetShare: 20,
-    accent: "bg-amber-500 text-ink",
+    accent: "bg-ochre text-white",
+    bar: "bg-ochre",
   },
   world_football: {
     slug: "world-football",
@@ -40,7 +43,8 @@ export const CATEGORIES: Record<Category, CategoryMeta> = {
     description:
       "ליגת האלופות, הליגות הגדולות באירופה, נבחרת ישראל ומונדיאל.",
     targetShare: 10,
-    accent: "bg-emerald-600 text-white",
+    accent: "bg-olive text-white",
+    bar: "bg-olive",
   },
 };
 

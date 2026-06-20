@@ -4,11 +4,11 @@ import { SITE } from "@/lib/site";
 
 export function Footer() {
   return (
-    <footer className="mt-12 border-t border-slate-200 bg-white">
-      <div className="mx-auto max-w-5xl px-4 py-8">
+    <footer className="mt-12 border-t border-line bg-white">
+      <div className="mx-auto max-w-6xl px-4 py-8">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
           <div className="max-w-sm">
-            <span className="rounded-md bg-brand px-2 py-1 text-lg font-extrabold text-white">
+            <span className="rounded-md bg-brand px-2.5 py-1 text-lg font-extrabold text-white">
               SPORTZ
             </span>
             <p className="mt-3 text-sm leading-6 text-ink-muted">
@@ -43,9 +43,9 @@ export function Footer() {
           </nav>
         </div>
 
-        <div className="mt-8 border-t border-slate-100 pt-4 text-xs text-ink-muted">
+        <div className="mt-8 border-t border-line pt-4 text-xs text-ink-muted">
           © {new Date().getFullYear()} {SITE.name}. כל הזכויות שמורות. אתר חדשות
-          ספורט אוטומטי - מתעדכן כל 5 דקות.
+          ספורט אוטומטי.
         </div>
       </div>
     </footer>

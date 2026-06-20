@@ -11,23 +11,23 @@ html {
 }
 
 body {
-  @apply bg-slate-50 text-ink antialiased;
+  @apply bg-paper text-ink antialiased;
 }
 
 /* גוף כתבה: שמירה על שורות ריקות כפסקאות */
 .article-body p {
-  @apply mb-4 leading-8 text-slate-700;
+  @apply mb-4 leading-8 text-ink-soft;
 }
 
 .article-body p:last-child {
   @apply mb-0;
 }
 
-/* קו תחתון אדום עדין לקישורי ניווט פעילים */
-.nav-link-active {
-  @apply text-brand;
+/* כותרת מקטע בסגנון פורטל - פס צבע + טקסט בולט */
+.section-bar {
+  @apply mb-4 flex items-center gap-2.5;
 }
 
 ::selection {
-  @apply bg-brand/20;
+  @apply bg-brand/15;
 }

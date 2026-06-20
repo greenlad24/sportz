@@ -6,7 +6,7 @@ import { timeAgoHe } from "@/lib/time";
 
 export function FeaturedArticle({ article }: { article: Article }) {
   return (
-    <article className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-lg">
+    <article className="group overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition hover:shadow-lg hover:shadow-ink/5">
       <Link href={`/article/${article.slug}`} className="block">
         <div className="relative">
           <ArticleImage

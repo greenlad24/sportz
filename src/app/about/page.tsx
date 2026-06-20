@@ -12,7 +12,7 @@ export default function AboutPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="text-3xl font-extrabold text-ink">אודות {SITE.name}</h1>
-      <div className="mt-4 space-y-4 text-lg leading-8 text-slate-700">
+      <div className="mt-4 space-y-4 text-lg leading-8 text-ink-soft">
         <p>
           <strong>{SITE.name}</strong> הוא אתר חדשות ספורט בעברית שמתעדכן
           אוטומטית כל 5 דקות. המנוע סורק מגוון מקורות בארץ ובארה&quot;ב, מאתר את

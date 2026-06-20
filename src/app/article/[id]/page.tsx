@@ -138,7 +138,7 @@ export default async function ArticlePage({
             {article.tags.map((t) => (
               <span
                 key={t}
-                className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-ink-soft"
+                className="rounded-full bg-paper-soft px-3 py-1 text-xs font-medium text-ink-soft"
               >
                 #{t}
               </span>
@@ -147,7 +147,7 @@ export default async function ArticlePage({
         )}
 
         {article.sourceUrl && (
-          <p className="mt-6 border-t border-slate-100 pt-4 text-sm text-ink-muted">
+          <p className="mt-6 border-t border-line pt-4 text-sm text-ink-muted">
             מבוסס על דיווח מ-
             <a
               href={article.sourceUrl}

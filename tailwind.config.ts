@@ -11,16 +11,24 @@ const config: Config = {
         sans: ["var(--font-heebo)", "system-ui", "sans-serif"],
       },
       colors: {
+        // פלטה חמה ורגועה (בהשראת sport5) במקום אדום/לבן חזק
         brand: {
-          DEFAULT: "#e11d2a",
-          dark: "#b3131f",
-          light: "#ff3b48",
+          DEFAULT: "#C0392B", // אדום לבנים חם
+          dark: "#9A2D22",
+          light: "#D9594A",
         },
         ink: {
-          DEFAULT: "#0f172a",
-          soft: "#1e293b",
-          muted: "#64748b",
+          DEFAULT: "#26201d", // שחור-חום רך
+          soft: "#4b423c",
+          muted: "#8a7d72",
         },
+        paper: {
+          DEFAULT: "#FAF6EF", // שמנת חמה לרקע
+          soft: "#F2EADD",
+        },
+        line: "#E8DFD1", // גבול חם עדין
+        ochre: "#C68A2E", // ענבר חם (כדורסל ישראלי)
+        olive: "#6E8B3D", // זית רגוע (כדורגל)
       },
       keyframes: {
         pulseLive: {
