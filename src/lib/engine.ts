@@ -2,17 +2,22 @@ import type { Article, Category, GeneratedArticle } from "./types";
 import { SOURCES } from "./sources";
 import { fetchAllSources } from "./rss";
 import { scrapeIsraeliSites } from "./scrape";
-import { selectCandidates } from "./relevance";
-import { generateArticles } from "./claude";
-import { mergeArticles } from "./store";
+import { selectCandidates, type ScoredItem } from "./relevance";
+import { generateArticles } from "./llm";
+import {
+  mergeArticles,
+  getProcessedLinks,
+  addProcessedLinks,
+} from "./store";
 import { hashId, slugify } from "./utils";
 import { CATEGORIES } from "./categories";
 
 export interface RefreshResult {
   fetched: number;
-  candidates: number;
+  candidates: number; // מועמדים *חדשים* (אחרי סינון מול קישורים שכבר עובדו)
   generated: number;
   added: number;
+  skippedLlm: boolean; // האם דילגנו על קריאת ה-API (אין תוכן חדש)
   perCategory: Record<Category, number>;
   durationMs: number;
 }
@@ -79,18 +84,42 @@ export async function runRefresh(): Promise<RefreshResult> {
     israeli_basketball: targets.israeli_basketball + 3,
     world_football: targets.world_football + 2,
   };
-  const candidates = selectCandidates(raw, {
+  const selected = selectCandidates(raw, {
     lookbackHours,
     perCategory: perCategoryCap,
   });
+
+  // 2.1) דה-דופ מול ה-API: מסירים מועמדים שכבר עובדו בעבר (לפי הקישור).
+  //      זהו החיסכון העיקרי - לא משלמים על API עבור חדשות שכבר כיסינו.
+  const processed = await getProcessedLinks();
+  const candidates: Record<Category, ScoredItem[]> = {
+    avdija: selected.avdija.filter((it) => !processed.has(it.link)),
+    israeli_basketball: selected.israeli_basketball.filter(
+      (it) => !processed.has(it.link),
+    ),
+    world_football: selected.world_football.filter(
+      (it) => !processed.has(it.link),
+    ),
+  };
   const candidateCount = Object.values(candidates).reduce(
     (n, a) => n + a.length,
     0,
   );
 
-  // 3) יצירת כתבות בעברית (קריאה אחת מאוחדת ל-Claude)
-  const generated =
-    candidateCount > 0 ? await generateArticles(candidates, targets) : [];
+  // 3) יצירת כתבות בעברית (קריאה אחת מאוחדת ל-LLM) - רק אם יש תוכן חדש.
+  const skippedLlm = candidateCount === 0;
+  const generated = skippedLlm
+    ? []
+    : await generateArticles(candidates, targets);
+
+  // 3.1) מסמנים את כל הקישורים ששלחנו כ"עובדו" (גם אם לא נכתבה כתבה מכולם),
+  //      כדי לא לבזבז עליהם קריאת API חוזרת בריצות הבאות.
+  if (!skippedLlm) {
+    const sentLinks = Object.values(candidates)
+      .flat()
+      .map((it) => it.link);
+    await addProcessedLinks(sentLinks);
+  }
 
   // 4) המרה לכתבות ומיזוג לאחסון (הסרת כפילויות מול הקיים)
   const articles = generated.map(toArticle).filter((a) => a.headline);
@@ -108,6 +137,7 @@ export async function runRefresh(): Promise<RefreshResult> {
     candidates: candidateCount,
     generated: generated.length,
     added: added.length,
+    skippedLlm,
     perCategory,
     durationMs: Date.now() - startedAt,
   };

@@ -3,13 +3,14 @@ import type { Category, GeneratedArticle } from "./types";
 import type { ScoredItem } from "./relevance";
 import { CATEGORIES } from "./categories";
 
-const MODEL = process.env.CLAUDE_MODEL || "claude-sonnet-4-6";
+// ספק ה-LLM: "anthropic" (ברירת מחדל) או "openai" / "minimax" (כל endpoint תואם-OpenAI).
+const PROVIDER = (process.env.LLM_PROVIDER || "anthropic").toLowerCase();
+
+const ANTHROPIC_MODEL = process.env.CLAUDE_MODEL || "claude-sonnet-4-6";
 
 /**
- * מדריך הסגנון + ההנחיות. זהו פרומפט יציב (לא משתנה בין ריצות) ולכן
- * אנו מסמנים אותו ל-prompt caching עם TTL של שעה. בריצה כל 5 דקות,
- * רוב הטוקנים של הפרומפט הזה ייקראו מהמטמון (~0.1x מהעלות) -
- * זה החיסכון העיקרי בעלות מול שמירה על איכות.
+ * מדריך הסגנון + ההנחיות. פרומפט יציב (לא משתנה בין ריצות) ולכן בספק Anthropic
+ * הוא מסומן ל-prompt caching. זהו גם החלק שמכתיב את איכות הכתיבה בעברית.
  */
 const SYSTEM_PROMPT = `אתה עורך ראשי וכתב בכיר באתר חדשות ספורט ישראלי בשם "SPORTZ".
 אתה כותב בעברית עיתונאית, זורמת, אנרגטית ומדויקת - בסגנון של אתרי הספורט המובילים בישראל (כמו sport5).
@@ -67,8 +68,7 @@ function buildUserMessage(
   });
 
   return (
-    "הנה פריטי החדשות הגולמיים שנאספו ב-5 הדקות האחרונות. " +
-    "כתוב כתבות בעברית לפי ההנחיות והחזר JSON בלבד.\n\n" +
+    "הנה פריטי החדשות הגולמיים שנאספו. כתוב כתבות בעברית לפי ההנחיות והחזר JSON בלבד.\n\n" +
     JSON.stringify(payload, null, 2)
   );
 }
@@ -88,34 +88,25 @@ function extractJson(text: string): { articles: GeneratedArticle[] } | null {
   }
 }
 
-/**
- * בונה לקוח Anthropic. תומך בשתי שיטות אימות:
- *  - ANTHROPIC_API_KEY  -> נשלח כ-x-api-key
- *  - ANTHROPIC_AUTH_TOKEN -> נשלח כ-Authorization: Bearer (access token / OAuth)
- * אם ה-token הוא OAuth (sk-ant-oat...) מוסיפים את כותרת ה-beta הנדרשת.
- */
-function buildClient(): {
+// ── ספק Anthropic (Claude) ─────────────────────────────────────────
+
+function buildAnthropic(): {
   client: Anthropic;
   requestOptions?: { headers: Record<string, string> };
 } {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const authToken = process.env.ANTHROPIC_AUTH_TOKEN;
-
   if (!apiKey && !authToken) {
     throw new Error(
       "missing credentials: set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN",
     );
   }
-
-  // העדפה ל-auth token כשהוגדר (מבטל את ה-x-api-key כדי לא לשלוח שתי כותרות).
   const client = authToken
     ? new Anthropic({ authToken, apiKey: null })
     : new Anthropic({ apiKey });
-
   const isOAuth =
     !!authToken &&
     (process.env.ANTHROPIC_OAUTH === "1" || /^sk-ant-oat/.test(authToken));
-
   return {
     client,
     requestOptions: isOAuth
@@ -124,6 +115,68 @@ function buildClient(): {
   };
 }
 
+async function callAnthropic(userMessage: string): Promise<string> {
+  const { client, requestOptions } = buildAnthropic();
+  const response = await client.messages.create(
+    {
+      model: ANTHROPIC_MODEL,
+      max_tokens: 8000,
+      system: [
+        {
+          type: "text",
+          text: SYSTEM_PROMPT,
+          cache_control: { type: "ephemeral", ttl: "1h" },
+        },
+      ],
+      messages: [{ role: "user", content: userMessage }],
+    },
+    requestOptions,
+  );
+  const block = response.content.find((b) => b.type === "text");
+  return block && "text" in block ? block.text : "";
+}
+
+// ── ספק תואם-OpenAI (MiniMax / DeepSeek / OpenRouter / Together ...) ─
+
+async function callOpenAICompatible(userMessage: string): Promise<string> {
+  const base = process.env.LLM_BASE_URL;
+  const key = process.env.LLM_API_KEY;
+  const model = process.env.LLM_MODEL;
+  if (!base || !key || !model) {
+    throw new Error(
+      "missing config: set LLM_BASE_URL, LLM_API_KEY and LLM_MODEL for the OpenAI-compatible provider",
+    );
+  }
+  const url = `${base.replace(/\/$/, "")}/chat/completions`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 8000,
+      temperature: 0.5,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userMessage },
+      ],
+    }),
+    signal: AbortSignal.timeout(90000),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`LLM HTTP ${res.status}: ${body.slice(0, 300)}`);
+  }
+  const data = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+  };
+  return data.choices?.[0]?.message?.content ?? "";
+}
+
+// ── נקודת כניסה אחידה ──────────────────────────────────────────────
+
 export async function generateArticles(
   candidates: Record<Category, ScoredItem[]>,
   targets: Record<Category, number>,
@@ -131,36 +184,21 @@ export async function generateArticles(
   const total = Object.values(candidates).reduce((n, a) => n + a.length, 0);
   if (total === 0) return [];
 
-  const { client, requestOptions } = buildClient();
+  const userMessage = buildUserMessage(candidates, targets);
 
-  const response = await client.messages.create(
-    {
-      model: MODEL,
-      max_tokens: 8000,
-      system: [
-        {
-          type: "text",
-          text: SYSTEM_PROMPT,
-          // prompt caching: הפרומפט היציב נשמר במטמון לשעה -> ריצות חוזרות זולות
-          cache_control: { type: "ephemeral", ttl: "1h" },
-        },
-      ],
-      messages: [
-        { role: "user", content: buildUserMessage(candidates, targets) },
-      ],
-    },
-    requestOptions,
-  );
+  const text =
+    PROVIDER === "openai" ||
+    PROVIDER === "minimax" ||
+    PROVIDER === "openai-compatible"
+      ? await callOpenAICompatible(userMessage)
+      : await callAnthropic(userMessage);
 
-  const textBlock = response.content.find((b) => b.type === "text");
-  const text = textBlock && "text" in textBlock ? textBlock.text : "";
   const parsed = extractJson(text);
   if (!parsed) {
-    console.warn("[claude] failed to parse JSON output");
+    console.warn(`[llm] failed to parse JSON output (provider=${PROVIDER})`);
     return [];
   }
 
-  // ולידציה בסיסית
   return parsed.articles.filter(
     (a) =>
       a &&
