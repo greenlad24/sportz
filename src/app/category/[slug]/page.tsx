@@ -1,15 +1,12 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getArticles } from "@/lib/store";
-import { categoryBySlug, CATEGORIES } from "@/lib/categories";
+import { categoryBySlug } from "@/lib/categories";
 import { ArticleCard } from "@/components/ArticleCard";
 import { SITE } from "@/lib/site";
 
-export const revalidate = 300;
-
-export function generateStaticParams() {
-  return Object.values(CATEGORIES).map((c) => ({ slug: c.slug }));
-}
+// דינמי: מרונדר מהאחסון החי בכל בקשה, כך שכתבות חדשות מופיעות מיד.
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
