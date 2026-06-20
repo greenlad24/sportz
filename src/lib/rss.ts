@@ -7,6 +7,9 @@ const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",
   trimValues: true,
+  // לא לעבד ישויות XML - מונע את שגיאת "Entity expansion limit" (למשל ב-Reddit).
+  // ה-decoding של &amp; / &quot; וכו' נעשה ממילא ב-stripHtml.
+  processEntities: false,
 });
 
 function asArray<T>(v: T | T[] | undefined): T[] {
