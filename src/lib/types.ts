@@ -59,6 +59,14 @@ export interface Update {
   createdAt: string; // ISO
 }
 
+export interface Comment {
+  id: string;
+  articleId: string;
+  name: string;
+  text: string;
+  createdAt: string; // ISO
+}
+
 /** מבנה הפלט המלא של ה-LLM */
 export interface LlmOutput {
   articles: GeneratedArticle[];

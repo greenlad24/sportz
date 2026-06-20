@@ -1,11 +1,12 @@
 import { promises as fs } from "fs";
 import path from "path";
-import type { Article, Update } from "./types";
+import type { Article, Update, Comment } from "./types";
 import { SEED_ARTICLES, SEED_UPDATES } from "./seed";
 
 const KEY_ARTICLES = "sportz:articles";
 const KEY_LINKS = "sportz:links";
 const KEY_UPDATES = "sportz:updates";
+const KEY_COMMENTS = "sportz:comments";
 const MAX_ARTICLES = 200;
 const MAX_LINKS = 4000;
 const MAX_UPDATES = 80;
@@ -186,6 +187,34 @@ export async function addUpdates(updates: Update[]): Promise<void> {
     .slice(0, MAX_UPDATES);
 
   await backendSet(KEY_UPDATES, "updates.json", merged);
+}
+
+// ── תגובות (משותפות, נשמרות בשרת) ─────────────────────────────────
+
+type CommentMap = Record<string, Comment[]>;
+
+export async function getComments(articleId: string): Promise<Comment[]> {
+  const map =
+    (await backendGet<CommentMap>(KEY_COMMENTS, "comments.json", true)) ?? {};
+  return [...(map[articleId] ?? [])].sort(
+    (a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+}
+
+export async function getCommentCount(articleId: string): Promise<number> {
+  const map =
+    (await backendGet<CommentMap>(KEY_COMMENTS, "comments.json", false)) ?? {};
+  return (map[articleId] ?? []).length;
+}
+
+export async function addComment(comment: Comment): Promise<void> {
+  const map =
+    (await backendGet<CommentMap>(KEY_COMMENTS, "comments.json", true)) ?? {};
+  const list = map[comment.articleId] ?? [];
+  list.unshift(comment);
+  map[comment.articleId] = list.slice(0, 300);
+  await backendSet(KEY_COMMENTS, "comments.json", map);
 }
 
 export const storageMode = useKv ? "upstash" : "file";
