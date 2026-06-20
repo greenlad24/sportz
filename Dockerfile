@@ -14,6 +14,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_SITE_URL
 ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
 RUN npm run build
+# מבטיח שתיקיית public קיימת גם אם היא ריקה (לשלב ה-COPY בהמשך)
+RUN mkdir -p /app/public
 
 # ---- שלב ריצה ----
 FROM node:22-alpine AS runner
