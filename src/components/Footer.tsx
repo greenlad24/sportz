@@ -5,7 +5,7 @@ import { SITE } from "@/lib/site";
 export function Footer() {
   return (
     <footer className="mt-12 border-t border-line bg-white">
-      <div className="mx-auto max-w-6xl px-4 py-8">
+      <div className="mx-auto max-w-site px-4 py-8">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
           <div className="max-w-sm">
             <span className="rounded-md bg-brand px-2.5 py-1 text-lg font-extrabold text-white">

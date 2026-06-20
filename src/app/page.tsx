@@ -63,7 +63,7 @@ export default async function HomePage() {
     .slice(0, 6); // "הנקראות ביותר"
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-5">
+    <div className="mx-auto max-w-site px-4 py-5">
       {/* רצועת מבזקים */}
       <BreakingTicker items={ranked.slice(0, 8)} />
 

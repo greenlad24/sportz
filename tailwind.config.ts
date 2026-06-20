@@ -7,6 +7,10 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      maxWidth: {
+        // רוחב התוכן של האתר (הרקעים נשארים ברוחב מלא)
+        site: "988px",
+      },
       fontFamily: {
         // סטאק גופנים סטנדרטי בסגנון ESPN (Helvetica/Arial)
         sans: [

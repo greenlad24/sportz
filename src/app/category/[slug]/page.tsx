@@ -44,7 +44,7 @@ export default async function CategoryPage({
   const items = all.filter((a) => a.category === c.category);
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6">
+    <div className="mx-auto max-w-site px-4 py-6">
       <header className="mb-6">
         <span
           className={`inline-block rounded px-2.5 py-1 text-sm font-bold ${c.accent}`}

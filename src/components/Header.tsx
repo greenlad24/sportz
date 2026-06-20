@@ -16,7 +16,7 @@ export function Header() {
     <header className="sticky top-0 z-50">
       {/* פס עליון - מילוי גרדיאנט; לוגו מימין, תוצאות חיות משמאל */}
       <div className="bg-gradient-to-l from-ink to-brand text-white">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4">
+        <div className="mx-auto flex h-14 max-w-site items-center justify-between gap-4 px-4">
           <Link href="/" className="flex items-baseline gap-2">
             <span className="text-2xl font-extrabold tracking-tight">
               SPORTZ
@@ -28,7 +28,7 @@ export function Header() {
 
       {/* פס ניווט - חיפוש מימין, קטגוריות שוות, LIVE משמאל */}
       <nav className="border-b border-line bg-white">
-        <div className="mx-auto flex max-w-6xl items-stretch px-1">
+        <div className="mx-auto flex max-w-site items-stretch px-1">
           <button
             type="button"
             aria-label="חיפוש"
