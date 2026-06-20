@@ -61,6 +61,16 @@ npm run refresh
 curl http://localhost:3000/api/refresh
 ```
 
+## פריסה ל-DigitalOcean Droplet (מומלץ)
+
+הדרך הנוחה ביותר: Docker עם מתזמן פנימי (כל 5 דקות) ואחסון קבצים מתמשך —
+**ללא צורך בבסיס נתונים חיצוני**. מדריך מלא: **[DEPLOY-DROPLET.md](./DEPLOY-DROPLET.md)**.
+
+```bash
+cp .env.example .env   # מלא ANTHROPIC_API_KEY, NEXT_PUBLIC_SITE_URL, CRON_SECRET
+docker compose up -d --build
+```
+
 ## פריסה ל-Vercel
 
 1. דחוף את הריפו ל-GitHub וייבא ב-Vercel.

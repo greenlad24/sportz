@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+.data
+npm-debug.log*
+.env
+.env*.local
+.DS_Store
+README.md
+DEPLOY-DROPLET.md
+*.tsbuildinfo

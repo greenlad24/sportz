@@ -8,6 +8,12 @@ export interface Source {
   url: string;
   /** משקל בסיסי לרלוונטיות - מקורות ישראליים/ייעודיים מקבלים יותר */
   weight: number;
+  /**
+   * מקור "רחב" = פיד NBA כללי (לא ממוקד באבדיה). מפריטים כאלה נשמרים רק
+   * פריטים שמזכירים במפורש את אבדיה/בלייזרס, כדי לא להציף את הקטגוריה
+   * בחדשות NBA לא רלוונטיות.
+   */
+  broad?: boolean;
 }
 
 /**
@@ -62,6 +68,109 @@ export const SOURCES: Source[] = [
     category: "avdija",
     url: "https://www.reddit.com/r/ripcity/.rss",
     weight: 4,
+    broad: true,
+  },
+
+  // ─── פידי NBA כלליים (אנגלית) - מהם נשמרים רק פריטי אבדיה/בלייזרס ───
+  {
+    id: "espn-nba",
+    name: "ESPN NBA",
+    lang: "en",
+    category: "avdija",
+    url: "https://www.espn.com/espn/rss/nba/news",
+    weight: 6,
+    broad: true,
+  },
+  {
+    id: "hoopshype",
+    name: "HoopsHype",
+    lang: "en",
+    category: "avdija",
+    url: "https://hoopshype.com/feed/",
+    weight: 5,
+    broad: true,
+  },
+  {
+    id: "slamonline",
+    name: "SLAM",
+    lang: "en",
+    category: "avdija",
+    url: "https://www.slamonline.com/category/nba/feed/",
+    weight: 5,
+    broad: true,
+  },
+  // פידי NBA נוספים דרך Feedspot (חלקם ממקורות בתשלום כמו The Athletic)
+  {
+    id: "fs-athletic-nba",
+    name: "The Athletic NBA",
+    lang: "en",
+    category: "avdija",
+    url: "https://www.feedspot.com/infiniterss.php?_src=feed_title&followfeedid=5251056&q=site:https%3A%2F%2Ftheathletic.com%2Fnba%2F%3Frss",
+    weight: 5,
+    broad: true,
+  },
+  {
+    id: "fs-2298",
+    name: "Feedspot NBA 1",
+    lang: "en",
+    category: "avdija",
+    url: "https://www.feedspot.com/infiniterss.php?_src=feed_title&followfeedid=2298&q=site:",
+    weight: 4,
+    broad: true,
+  },
+  {
+    id: "fs-5365568",
+    name: "Feedspot NBA 2",
+    lang: "en",
+    category: "avdija",
+    url: "https://www.feedspot.com/infiniterss.php?_src=feed_title&followfeedid=5365568&q=site:",
+    weight: 4,
+    broad: true,
+  },
+  {
+    id: "fs-5463730",
+    name: "Feedspot NBA 3",
+    lang: "en",
+    category: "avdija",
+    url: "https://www.feedspot.com/infiniterss.php?_src=feed_title&followfeedid=5463730&q=site:",
+    weight: 4,
+    broad: true,
+  },
+  {
+    id: "fs-5463736",
+    name: "Feedspot NBA 4",
+    lang: "en",
+    category: "avdija",
+    url: "https://www.feedspot.com/infiniterss.php?_src=feed_title&followfeedid=5463736&q=site:",
+    weight: 4,
+    broad: true,
+  },
+  {
+    id: "fs-5365565",
+    name: "Feedspot NBA 5",
+    lang: "en",
+    category: "avdija",
+    url: "https://www.feedspot.com/infiniterss.php?_src=feed_title&followfeedid=5365565&q=site:",
+    weight: 4,
+    broad: true,
+  },
+  {
+    id: "fs-5365574",
+    name: "Feedspot NBA 6",
+    lang: "en",
+    category: "avdija",
+    url: "https://www.feedspot.com/infiniterss.php?_src=feed_title&followfeedid=5365574&q=site:",
+    weight: 4,
+    broad: true,
+  },
+  {
+    id: "fs-5365591",
+    name: "Feedspot NBA 7",
+    lang: "en",
+    category: "avdija",
+    url: "https://www.feedspot.com/infiniterss.php?_src=feed_title&followfeedid=5365591&q=site:",
+    weight: 4,
+    broad: true,
   },
 
   // ─── כדורסל ישראלי (20%) ───

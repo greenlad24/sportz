@@ -68,13 +68,23 @@ function sourceWeight(sourceName: string): number {
   return SOURCES.find((s) => s.name === sourceName)?.weight ?? 3;
 }
 
-/** ניקוד רלוונטיות של פריט בודד */
-export function scoreItem(item: RawItem): number {
+function isBroadSource(sourceName: string): boolean {
+  return SOURCES.find((s) => s.name === sourceName)?.broad ?? false;
+}
+
+/** ניקוד מילות-מפתח בלבד (כמה הפריט באמת רלוונטי לקטגוריה שלו) */
+export function keywordScore(item: RawItem): number {
   const hay = `${item.title} ${item.summary}`.toLowerCase();
   let kw = 0;
   for (const { term, score } of KEYWORDS[item.category]) {
     if (hay.includes(term.toLowerCase())) kw += score;
   }
+  return kw;
+}
+
+/** ניקוד רלוונטיות כולל של פריט בודד (לדירוג) */
+export function scoreItem(item: RawItem): number {
+  const kw = keywordScore(item);
   // בונוס למקורות חזקים/ייעודיים
   const weight = sourceWeight(item.source);
   // בונוס לטריות (עד 5 נקודות, יורד עם הזמן)
@@ -97,8 +107,13 @@ export function selectCandidates(
 
   const scored: ScoredItem[] = items
     .filter((it) => new Date(it.publishedAt).getTime() >= cutoff)
+    // שער רלוונטיות לפי מילות-מפתח: פיד NBA רחב חייב להזכיר אבדיה/בלייזרס
+    // במפורש (סף 5), מקור ממוקד דורש רק רמז אחד (סף 1).
+    .filter((it) => {
+      const minKw = isBroadSource(it.source) ? 5 : 1;
+      return keywordScore(it) >= minKw;
+    })
     .map((it) => ({ ...it, score: scoreItem(it) }))
-    .filter((it) => it.score > 2) // דורש לפחות רמז אחד של רלוונטיות
     .sort((a, b) => b.score - a.score);
 
   // הסרת כפילויות: אם כותרת דומה מאוד לכותרת שכבר נבחרה, דלג

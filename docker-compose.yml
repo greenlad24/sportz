@@ -1,0 +1,35 @@
+services:
+  web:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
+    image: sportz-web
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "3000:3000"
+    volumes:
+      # אחסון מתמשך לכתבות (file store)
+      - sportz-data:/app/.data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/robots.txt"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  # מתזמן פנימי - מפעיל את מנוע הניוז כל 5 דקות
+  scheduler:
+    image: node:22-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+    env_file: .env
+    environment:
+      INTERNAL_URL: "http://web:3000"
+    volumes:
+      - ./scripts/scheduler.mjs:/scheduler.mjs:ro
+    command: ["node", "/scheduler.mjs"]
+
+volumes:
+  sportz-data:
