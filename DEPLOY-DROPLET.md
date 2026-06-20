@@ -29,6 +29,19 @@ echo '/swapfile none swap sw 0 0' >> /etc/fstab
 
 ## 2. התקנת Docker
 
+**אפשרות מהירה (Ubuntu 24.04)** — כולל את תוסף `docker compose`:
+
+```bash
+apt-get update && apt-get install -y git docker.io docker-compose-v2
+systemctl enable --now docker
+docker --version && docker compose version
+```
+
+> אל תשתמשו ב-`apt install docker-compose` (זו גרסה ישנה עם מקף). הפרויקט
+> משתמש ב-`docker compose` (רווח), שמגיע מ-`docker-compose-v2`.
+
+**אפשרות מומלצת (Docker הרשמי, גרסה עדכנית):**
+
 ```bash
 apt-get update && apt-get install -y ca-certificates curl git
 install -m 0755 -d /etc/apt/keyrings
