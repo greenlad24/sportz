@@ -88,6 +88,42 @@ function extractJson(text: string): { articles: GeneratedArticle[] } | null {
   }
 }
 
+/**
+ * בונה לקוח Anthropic. תומך בשתי שיטות אימות:
+ *  - ANTHROPIC_API_KEY  -> נשלח כ-x-api-key
+ *  - ANTHROPIC_AUTH_TOKEN -> נשלח כ-Authorization: Bearer (access token / OAuth)
+ * אם ה-token הוא OAuth (sk-ant-oat...) מוסיפים את כותרת ה-beta הנדרשת.
+ */
+function buildClient(): {
+  client: Anthropic;
+  requestOptions?: { headers: Record<string, string> };
+} {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const authToken = process.env.ANTHROPIC_AUTH_TOKEN;
+
+  if (!apiKey && !authToken) {
+    throw new Error(
+      "missing credentials: set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN",
+    );
+  }
+
+  // העדפה ל-auth token כשהוגדר (מבטל את ה-x-api-key כדי לא לשלוח שתי כותרות).
+  const client = authToken
+    ? new Anthropic({ authToken, apiKey: null })
+    : new Anthropic({ apiKey });
+
+  const isOAuth =
+    !!authToken &&
+    (process.env.ANTHROPIC_OAUTH === "1" || /^sk-ant-oat/.test(authToken));
+
+  return {
+    client,
+    requestOptions: isOAuth
+      ? { headers: { "anthropic-beta": "oauth-2025-04-20" } }
+      : undefined,
+  };
+}
+
 export async function generateArticles(
   candidates: Record<Category, ScoredItem[]>,
   targets: Record<Category, number>,
@@ -95,28 +131,26 @@ export async function generateArticles(
   const total = Object.values(candidates).reduce((n, a) => n + a.length, 0);
   if (total === 0) return [];
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY is not set");
-  }
+  const { client, requestOptions } = buildClient();
 
-  const client = new Anthropic({ apiKey });
-
-  const response = await client.messages.create({
-    model: MODEL,
-    max_tokens: 8000,
-    system: [
-      {
-        type: "text",
-        text: SYSTEM_PROMPT,
-        // prompt caching: הפרומפט היציב נשמר במטמון לשעה -> ריצות חוזרות זולות
-        cache_control: { type: "ephemeral", ttl: "1h" },
-      },
-    ],
-    messages: [
-      { role: "user", content: buildUserMessage(candidates, targets) },
-    ],
-  });
+  const response = await client.messages.create(
+    {
+      model: MODEL,
+      max_tokens: 8000,
+      system: [
+        {
+          type: "text",
+          text: SYSTEM_PROMPT,
+          // prompt caching: הפרומפט היציב נשמר במטמון לשעה -> ריצות חוזרות זולות
+          cache_control: { type: "ephemeral", ttl: "1h" },
+        },
+      ],
+      messages: [
+        { role: "user", content: buildUserMessage(candidates, targets) },
+      ],
+    },
+    requestOptions,
+  );
 
   const textBlock = response.content.find((b) => b.type === "text");
   const text = textBlock && "text" in textBlock ? textBlock.text : "";

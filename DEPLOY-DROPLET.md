@@ -52,7 +52,9 @@ nano .env
 
 ```
 NEXT_PUBLIC_SITE_URL=https://your-domain.com
+# אימות: או מפתח API, או access token (לא שניהם)
 ANTHROPIC_API_KEY=sk-ant-...
+# ANTHROPIC_AUTH_TOKEN=        # חלופה: Bearer/OAuth access token
 CRON_SECRET=<מחרוזת אקראית>
 CLAUDE_MODEL=claude-sonnet-4-6
 # Upstash לא נדרש בדרופלט - השאירו ריק
