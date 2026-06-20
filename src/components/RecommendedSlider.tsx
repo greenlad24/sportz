@@ -48,6 +48,7 @@ export function RecommendedSlider({ items }: { items: Article[] }) {
   const paused = useRef(false);
 
   const count = items.length;
+  const lastIdx = Math.max(0, count - 2); // שני כרטיסים מוצגים בכל רגע
 
   function scrollTo(i: number) {
     const el = ref.current;
@@ -61,17 +62,22 @@ export function RecommendedSlider({ items }: { items: Article[] }) {
   }
 
   useEffect(() => {
-    if (count <= 1) return;
+    if (count <= 2) return;
     const id = setInterval(() => {
       if (paused.current) return;
-      idx.current = (idx.current + 1) % count;
+      // מתקדם עד הסוף ואז נעצר - בלי חזרה אוטומטית להתחלה
+      if (idx.current >= lastIdx) {
+        clearInterval(id);
+        return;
+      }
+      idx.current += 1;
       scrollTo(idx.current);
-    }, 3500);
+    }, 6500);
     return () => clearInterval(id);
-  }, [count]);
+  }, [count, lastIdx]);
 
   const next = () => {
-    idx.current = (idx.current + 1) % count;
+    idx.current = Math.min(lastIdx, idx.current + 1);
     scrollTo(idx.current);
   };
 
@@ -109,7 +115,7 @@ export function RecommendedSlider({ items }: { items: Article[] }) {
         ))}
       </div>
 
-      {count > 1 && <Handle side="left" onClick={next} />}
+      {count > 2 && <Handle side="left" onClick={next} />}
     </div>
   );
 }
