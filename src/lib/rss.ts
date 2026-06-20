@@ -17,6 +17,37 @@ function asArray<T>(v: T | T[] | undefined): T[] {
   return Array.isArray(v) ? v : [v];
 }
 
+function firstMediaUrl(node: unknown): string | undefined {
+  for (const m of asArray(node as any)) {
+    const url = m?.["@_url"];
+    if (typeof url === "string" && url) return url;
+  }
+  return undefined;
+}
+
+/** חילוץ תמונה מפריט RSS/Atom: media, enclosure, או <img> ראשון בתיאור */
+function extractImage(node: any, html: string): string | undefined {
+  const media =
+    firstMediaUrl(node?.["media:content"]) ||
+    firstMediaUrl(node?.["media:thumbnail"]);
+  if (media) return cleanUrl(media);
+
+  for (const e of asArray(node?.enclosure)) {
+    const url = e?.["@_url"];
+    const type = String(e?.["@_type"] || "");
+    if (url && (type.startsWith("image") || !type)) return cleanUrl(url);
+  }
+
+  const m = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+  if (m) return cleanUrl(m[1]);
+
+  return undefined;
+}
+
+function cleanUrl(url: string): string {
+  return url.replace(/&amp;/g, "&").trim();
+}
+
 /** שאיבת פיד RSS/Atom יחיד והמרה ל-RawItem[] */
 async function fetchSource(source: Source): Promise<RawItem[]> {
   try {
@@ -50,9 +81,10 @@ async function fetchSource(source: Source): Promise<RawItem[]> {
         typeof it?.link === "string"
           ? it.link
           : it?.link?.["@_href"] ?? it?.guid?.["#text"] ?? it?.guid ?? "";
-      const summary = stripHtml(
-        String(it?.description ?? it?.["content:encoded"] ?? ""),
+      const rawDesc = String(
+        it?.["content:encoded"] ?? it?.description ?? "",
       );
+      const summary = stripHtml(rawDesc);
       const pub = it?.pubDate ?? it?.["dc:date"] ?? it?.published;
       if (!title || !link) continue;
       items.push({
@@ -63,6 +95,7 @@ async function fetchSource(source: Source): Promise<RawItem[]> {
         lang: source.lang,
         category: source.category,
         publishedAt: toIso(pub),
+        image: extractImage(it, rawDesc),
       });
     }
 
@@ -72,9 +105,10 @@ async function fetchSource(source: Source): Promise<RawItem[]> {
         (l: any) => !l?.["@_rel"] || l?.["@_rel"] === "alternate",
       );
       const link = linkRaw?.["@_href"] ?? e?.id ?? "";
-      const summary = stripHtml(
-        String(e?.summary?.["#text"] ?? e?.summary ?? e?.content?.["#text"] ?? ""),
+      const rawContent = String(
+        e?.content?.["#text"] ?? e?.content ?? e?.summary?.["#text"] ?? e?.summary ?? "",
       );
+      const summary = stripHtml(rawContent);
       const pub = e?.updated ?? e?.published;
       if (!title || !link) continue;
       items.push({
@@ -85,6 +119,7 @@ async function fetchSource(source: Source): Promise<RawItem[]> {
         lang: source.lang,
         category: source.category,
         publishedAt: toIso(pub),
+        image: extractImage(e, rawContent),
       });
     }
 

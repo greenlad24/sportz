@@ -11,6 +11,7 @@ export interface RawItem {
   lang: "he" | "en";
   category: Category;
   publishedAt: string; // ISO
+  image?: string; // תמונה שחולצה מהמקור (אם קיימת)
 }
 
 /** כתבה מוגמרת בעברית, כפי שמוצגת באתר ונשמרת באחסון */

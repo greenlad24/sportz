@@ -134,8 +134,23 @@ export async function runRefresh(): Promise<RefreshResult> {
     await addUpdates(updateObjs);
   }
 
-  // 4) המרה לכתבות ומיזוג לאחסון (הסרת כפילויות מול הקיים)
-  const articles = generated.articles.map(toArticle).filter((a) => a.headline);
+  // 4) המרה לכתבות + שיוך תמונה מהמקור (לפי הקישור, אחרת תמונה כללית מהקטגוריה)
+  const imageByLink = new Map<string, string>();
+  const imageByCat: Partial<Record<Category, string>> = {};
+  for (const it of Object.values(candidates).flat()) {
+    if (it.image) {
+      imageByLink.set(it.link, it.image);
+      if (!imageByCat[it.category]) imageByCat[it.category] = it.image;
+    }
+  }
+
+  const articles = generated.articles
+    .map(toArticle)
+    .map((a) => ({
+      ...a,
+      imageUrl: imageByLink.get(a.sourceUrl) || imageByCat[a.category],
+    }))
+    .filter((a) => a.headline);
   const added = articles.length > 0 ? await mergeArticles(articles) : [];
 
   const perCategory: Record<Category, number> = {

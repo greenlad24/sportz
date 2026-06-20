@@ -85,6 +85,16 @@ function fromJsonLd(html: string, site: HtmlSite): RawItem[] {
   return items;
 }
 
+/** חילוץ URL של תמונה משדה image של JSON-LD (string / object / array) */
+function ldImage(img: unknown): string | undefined {
+  if (!img) return undefined;
+  if (typeof img === "string") return img;
+  if (Array.isArray(img)) return ldImage(img[0]);
+  const o = img as Record<string, any>;
+  const u = o.url || o["@id"] || o.contentUrl;
+  return typeof u === "string" ? u : undefined;
+}
+
 function collectLd(node: unknown, site: HtmlSite, out: RawItem[]) {
   if (!node || typeof node !== "object") return;
   if (Array.isArray(node)) {
@@ -110,6 +120,7 @@ function collectLd(node: unknown, site: HtmlSite, out: RawItem[]) {
         lang: "he",
         category,
         publishedAt: toIso(obj.datePublished),
+        image: ldImage(obj.image),
       });
     }
   }
