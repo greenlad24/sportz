@@ -68,7 +68,7 @@ export default async function HomePage() {
   // ברירת מחדל ל"המלצות לקריאה" עד שנצבר פרופיל עניין ב-localStorage
   const foryouFallback = ranked
     .filter((a) => a.id !== mainStory?.id)
-    .slice(0, 4);
+    .slice(0, 8);
 
   return (
     <div className="mx-auto max-w-site px-4 py-5">

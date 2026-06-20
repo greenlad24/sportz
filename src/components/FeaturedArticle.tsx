@@ -12,7 +12,7 @@ export function FeaturedArticle({
   tall?: boolean;
 }) {
   const imageClass = tall
-    ? "h-[440px] w-full sm:h-[560px] lg:h-[700px]"
+    ? "h-[340px] w-full sm:h-[440px] lg:h-[525px]"
     : "aspect-[16/9] w-full sm:aspect-[2/1]";
   return (
     <article className="group overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition hover:shadow-lg hover:shadow-ink/5">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArticleCard } from "./ArticleCard";
+import { RecommendedSlider } from "./RecommendedSlider";
 import { topInterests } from "@/lib/interests";
 import type { Article } from "@/lib/types";
 
@@ -52,11 +52,7 @@ export function ForYou({
           </span>
         )}
       </div>
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        {items.map((a) => (
-          <ArticleCard key={a.id} article={a} />
-        ))}
-      </div>
+      <RecommendedSlider items={items} />
     </section>
   );
 }

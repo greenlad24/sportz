@@ -9,13 +9,13 @@ import { timeAgoHe } from "@/lib/time";
  */
 export function HourlyUpdates({ updates }: { updates: Update[] }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-white">
+    <div className="flex h-[710px] flex-col overflow-hidden rounded-xl border border-line bg-white">
       <div className="flex items-center gap-1.5 bg-brand px-4 py-2.5 text-white">
         <span className="h-1.5 w-1.5 animate-live rounded-full bg-white" />
         <h2 className="text-base font-extrabold">עדכונים חיים</h2>
       </div>
 
-      <ol className="max-h-[640px] divide-y divide-line overflow-y-auto">
+      <ol className="min-h-0 flex-1 divide-y divide-line overflow-y-auto">
         {updates.map((u) => (
           <li key={u.id}>
             <Link

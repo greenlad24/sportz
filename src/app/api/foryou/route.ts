@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
         new Date(y.a.publishedAt).getTime() -
           new Date(x.a.publishedAt).getTime(),
     )
-    .slice(0, 4)
+    .slice(0, 8)
     .map((x) => x.a);
 
   return NextResponse.json({ articles: ranked });
