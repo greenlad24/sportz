@@ -65,19 +65,22 @@ export default async function HomePage() {
     .filter((a) => !usedIds.has(a.id) && !latestIds.has(a.id))
     .slice(0, 6);
 
+  // ברירת מחדל ל"המלצות לקריאה" עד שנצבר פרופיל עניין ב-localStorage
+  const foryouFallback = ranked
+    .filter((a) => a.id !== mainStory?.id)
+    .slice(0, 4);
+
   return (
     <div className="mx-auto max-w-site px-4 py-5">
-      {/* בלוק העל: מימין סיפור השעה + "בשבילך", משמאל עדכוני השעה */}
+      {/* בלוק העל: מימין הסיפור הראשי + המלצות לקריאה, משמאל עדכונים חיים (235px) */}
       {mainStory && (
-        <section className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="flex flex-col gap-8 lg:col-span-2">
-            <FeaturedArticle article={mainStory} />
-
-            {/* המלצות מותאמות אישית (localStorage) */}
-            <ForYou excludeId={mainStory.id} />
+        <section className="mb-10 flex flex-col gap-6 lg:flex-row">
+          <div className="flex min-w-0 flex-1 flex-col gap-8">
+            <FeaturedArticle article={mainStory} tall />
+            <ForYou fallback={foryouFallback} excludeId={mainStory.id} />
           </div>
 
-          <aside className="lg:col-span-1">
+          <aside className="lg:w-[235px] lg:shrink-0">
             <HourlyUpdates updates={updates} />
           </aside>
         </section>

@@ -4,7 +4,16 @@ import { CategoryChip } from "./CategoryChip";
 import { ArticleImage } from "./ArticleImage";
 import { timeAgoHe } from "@/lib/time";
 
-export function FeaturedArticle({ article }: { article: Article }) {
+export function FeaturedArticle({
+  article,
+  tall = false,
+}: {
+  article: Article;
+  tall?: boolean;
+}) {
+  const imageClass = tall
+    ? "h-[440px] w-full sm:h-[560px] lg:h-[700px]"
+    : "aspect-[16/9] w-full sm:aspect-[2/1]";
   return (
     <article className="group overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition hover:shadow-lg hover:shadow-ink/5">
       <Link href={`/article/${article.slug}`} className="block">
@@ -12,7 +21,7 @@ export function FeaturedArticle({ article }: { article: Article }) {
           <ArticleImage
             category={article.category}
             src={article.imageUrl}
-            className="aspect-[16/9] w-full sm:aspect-[2/1]"
+            className={imageClass}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
           <div className="absolute bottom-0 right-0 left-0 p-5 sm:p-7">

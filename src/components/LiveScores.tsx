@@ -57,7 +57,7 @@ export function LiveScores() {
 
   return (
     <div className="hidden items-center gap-0.5 md:flex">
-      <Arrow dir="end" onClick={() => scroll(-160)} />
+      <Arrow dir="start" onClick={() => scroll(160)} />
 
       <div
         ref={ref}
@@ -81,7 +81,7 @@ export function LiveScores() {
         ))}
       </div>
 
-      <Arrow dir="start" onClick={() => scroll(160)} />
+      <Arrow dir="end" onClick={() => scroll(-160)} />
     </div>
   );
 }
