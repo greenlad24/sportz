@@ -12,7 +12,7 @@ export function HourlyUpdates({ updates }: { updates: Update[] }) {
   return (
     <div className="overflow-hidden rounded-xl border border-line bg-white">
       <div className="flex items-center justify-between gap-2 bg-brand px-4 py-2.5 text-white">
-        <h2 className="text-base font-extrabold">עדכוני השעה</h2>
+        <h2 className="text-base font-extrabold">עדכונים חיים</h2>
         <span className="flex items-center gap-1.5 text-[11px] font-bold">
           <span className="h-1.5 w-1.5 animate-live rounded-full bg-white" />
           מתעדכן כל שעה

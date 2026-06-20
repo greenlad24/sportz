@@ -71,14 +71,7 @@ export default async function HomePage() {
       {mainStory && (
         <section className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="flex flex-col gap-8 lg:col-span-2">
-            <div>
-              <div className="mb-2">
-                <span className="rounded bg-brand px-2 py-0.5 text-xs font-extrabold text-white">
-                  סיפור השעה
-                </span>
-              </div>
-              <FeaturedArticle article={mainStory} />
-            </div>
+            <FeaturedArticle article={mainStory} />
 
             {/* המלצות מותאמות אישית (localStorage) */}
             <ForYou excludeId={mainStory.id} />
