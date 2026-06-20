@@ -6,7 +6,7 @@ import { CATEGORIES } from "./categories";
 // ספק ה-LLM: "anthropic" (ברירת מחדל) או "openai" / "minimax" (כל endpoint תואם-OpenAI).
 const PROVIDER = (process.env.LLM_PROVIDER || "anthropic").toLowerCase();
 
-const ANTHROPIC_MODEL = process.env.CLAUDE_MODEL || "claude-sonnet-4-6";
+const ANTHROPIC_MODEL = process.env.CLAUDE_MODEL || "claude-opus-4-8";
 
 /**
  * מדריך הסגנון + ההנחיות. פרומפט יציב (לא משתנה בין ריצות) ולכן בספק Anthropic
