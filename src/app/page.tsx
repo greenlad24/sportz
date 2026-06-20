@@ -2,9 +2,7 @@ import Link from "next/link";
 import { getArticles, getUpdates } from "@/lib/store";
 import { CATEGORY_ORDER, CATEGORIES } from "@/lib/categories";
 import { FeaturedArticle } from "@/components/FeaturedArticle";
-import { ArticleCard } from "@/components/ArticleCard";
 import { ArticleRow } from "@/components/ArticleRow";
-import { HeadlineList } from "@/components/HeadlineList";
 import { HourlyUpdates } from "@/components/HourlyUpdates";
 import { ForYou } from "@/components/ForYou";
 import { AdSlot } from "@/components/AdSlot";
@@ -110,11 +108,13 @@ export default async function HomePage() {
             <SectionHeading bar={c.bar} href={`/category/${c.slug}`}>
               {c.label}
             </SectionHeading>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <ArticleCard article={blockLead} />
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <FeaturedArticle article={blockLead} fill />
               {blockRest.length > 0 && (
-                <div className="rounded-xl border border-line bg-white p-4">
-                  <HeadlineList items={blockRest} />
+                <div className="border-t border-line">
+                  {blockRest.map((a) => (
+                    <ArticleRow key={a.id} article={a} />
+                  ))}
                 </div>
               )}
             </div>

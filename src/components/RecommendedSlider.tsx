@@ -50,14 +50,15 @@ export function RecommendedSlider({ items }: { items: Article[] }) {
   const count = items.length;
   const lastIdx = Math.max(0, count - 2); // שני כרטיסים מוצגים בכל רגע
 
-  function scrollTo(i: number) {
+  // גלילה אופקית של המכולה בלבד - לא מזיזה את העמוד (ללא scrollIntoView)
+  function scrollToCard(i: number) {
     const el = ref.current;
     if (!el) return;
     const card = el.children[i] as HTMLElement | undefined;
-    card?.scrollIntoView({
+    if (!card) return;
+    el.scrollTo({
+      left: card.offsetLeft + card.offsetWidth - el.scrollWidth,
       behavior: "smooth",
-      block: "nearest",
-      inline: "start",
     });
   }
 
@@ -71,14 +72,15 @@ export function RecommendedSlider({ items }: { items: Article[] }) {
         return;
       }
       idx.current += 1;
-      scrollTo(idx.current);
+      scrollToCard(idx.current);
     }, 6500);
     return () => clearInterval(id);
   }, [count, lastIdx]);
 
+  // לחיצה על הידית: מתקדם, וכשמגיעים לסוף חוזר להתחלת הרשימה
   const next = () => {
-    idx.current = Math.min(lastIdx, idx.current + 1);
-    scrollTo(idx.current);
+    idx.current = idx.current >= lastIdx ? 0 : idx.current + 1;
+    scrollToCard(idx.current);
   };
 
   return (
@@ -89,7 +91,7 @@ export function RecommendedSlider({ items }: { items: Article[] }) {
     >
       <div
         ref={ref}
-        className="flex snap-x gap-3 overflow-x-auto scroll-smooth pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="relative flex snap-x gap-3 overflow-x-auto scroll-smooth pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {items.map((a) => (
           <Link

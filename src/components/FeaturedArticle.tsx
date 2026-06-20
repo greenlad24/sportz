@@ -7,17 +7,24 @@ import { timeAgoHe } from "@/lib/time";
 export function FeaturedArticle({
   article,
   tall = false,
+  fill = false,
 }: {
   article: Article;
   tall?: boolean;
+  fill?: boolean;
 }) {
-  const imageClass = tall
-    ? "h-[340px] w-full sm:h-[440px] lg:h-[525px]"
-    : "aspect-[16/9] w-full sm:aspect-[2/1]";
+  const imageClass = fill
+    ? "h-[320px] w-full lg:h-full"
+    : tall
+      ? "h-[340px] w-full sm:h-[440px] lg:h-[525px]"
+      : "aspect-[16/9] w-full sm:aspect-[2/1]";
+  const fillCls = fill ? "lg:h-full" : "";
   return (
-    <article className="group overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition hover:shadow-lg hover:shadow-ink/5">
-      <Link href={`/article/${article.slug}`} className="block">
-        <div className="relative">
+    <article
+      className={`group overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition hover:shadow-lg hover:shadow-ink/5 ${fillCls}`}
+    >
+      <Link href={`/article/${article.slug}`} className={`block ${fillCls}`}>
+        <div className={`relative ${fillCls}`}>
           <ArticleImage
             category={article.category}
             src={article.imageUrl}
