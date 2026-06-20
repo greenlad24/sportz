@@ -114,8 +114,22 @@ export async function mergeArticles(fresh: Article[]): Promise<Article[]> {
 export async function getArticleBySlug(
   slug: string,
 ): Promise<Article | undefined> {
+  // סלאגים מכילים עברית; פרמטרי הניתוב של Next מגיעים מקודדי-URL (%D7..),
+  // לכן מפענחים לפני ההשוואה כדי שההתאמה תצליח.
+  let decoded = slug;
+  try {
+    decoded = decodeURIComponent(slug);
+  } catch {
+    // נשארים עם הערך המקורי אם הפענוח נכשל
+  }
   const all = await getArticles();
-  return all.find((a) => a.slug === slug || a.id === slug);
+  return all.find(
+    (a) =>
+      a.slug === decoded ||
+      a.id === decoded ||
+      a.slug === slug ||
+      a.id === slug,
+  );
 }
 
 // ── יומן קישורים שכבר עובדו (לחיסכון: לא שולחים שוב ל-API) ──────────
