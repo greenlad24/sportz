@@ -8,27 +8,36 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-heebo)", "system-ui", "sans-serif"],
+        // סטאק גופנים סטנדרטי בסגנון ESPN (Helvetica/Arial)
+        sans: [
+          '"Helvetica Neue"',
+          "Helvetica",
+          "Arial",
+          '"Arial Hebrew"',
+          '"Segoe UI"',
+          "Roboto",
+          "sans-serif",
+        ],
       },
       colors: {
-        // פלטה חמה ורגועה (בהשראת sport5) במקום אדום/לבן חזק
+        // רקע לבן וטקסט כהה בסגנון ESPN, עם דגש אדום
         brand: {
-          DEFAULT: "#C0392B", // אדום לבנים חם
+          DEFAULT: "#C0392B",
           dark: "#9A2D22",
           light: "#D9594A",
         },
         ink: {
-          DEFAULT: "#26201d", // שחור-חום רך
-          soft: "#4b423c",
-          muted: "#8a7d72",
+          DEFAULT: "#1a1a1a", // טקסט ראשי כמעט-שחור
+          soft: "#3f3f42",
+          muted: "#6b6b70",
         },
         paper: {
-          DEFAULT: "#FAF6EF", // שמנת חמה לרקע
-          soft: "#F2EADD",
+          DEFAULT: "#ffffff", // רקע לבן
+          soft: "#f2f3f5", // אפור בהיר מאוד למקטעים
         },
-        line: "#E8DFD1", // גבול חם עדין
-        ochre: "#C68A2E", // ענבר חם (כדורסל ישראלי)
-        olive: "#6E8B3D", // זית רגוע (כדורגל)
+        line: "#e3e3e6", // גבול אפור עדין
+        ochre: "#C68A2E",
+        olive: "#6E8B3D",
       },
       keyframes: {
         pulseLive: {
