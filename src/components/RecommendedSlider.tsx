@@ -3,7 +3,6 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { ArticleImage } from "./ArticleImage";
-import { CATEGORIES } from "@/lib/categories";
 import type { Article } from "@/lib/types";
 
 function Handle({
@@ -71,10 +70,6 @@ export function RecommendedSlider({ items }: { items: Article[] }) {
     return () => clearInterval(id);
   }, [count]);
 
-  const prev = () => {
-    idx.current = (idx.current - 1 + count) % count;
-    scrollTo(idx.current);
-  };
   const next = () => {
     idx.current = (idx.current + 1) % count;
     scrollTo(idx.current);
@@ -94,7 +89,7 @@ export function RecommendedSlider({ items }: { items: Article[] }) {
           <Link
             key={a.id}
             href={`/article/${a.slug}`}
-            className="group flex h-[120px] w-[320px] shrink-0 snap-start overflow-hidden rounded-lg bg-ink text-white"
+            className="group flex h-[130px] w-[calc(50%_-_6px)] shrink-0 snap-start overflow-hidden rounded-lg bg-ink text-white"
           >
             {/* תמונה מימין */}
             <div className="h-full w-[44%] shrink-0">
@@ -104,12 +99,9 @@ export function RecommendedSlider({ items }: { items: Article[] }) {
                 className="h-full w-full"
               />
             </div>
-            {/* טקסט משמאל בתוך הבלוק */}
-            <div className="flex flex-1 flex-col justify-center gap-1.5 p-3">
-              <span className="inline-block w-fit rounded bg-white/15 px-1.5 py-0.5 text-[10px] font-bold">
-                {CATEGORIES[a.category].label}
-              </span>
-              <h3 className="line-clamp-3 text-[13px] font-bold leading-5 group-hover:text-brand-light">
+            {/* כותרת משמאל בתוך הבלוק */}
+            <div className="flex flex-1 items-center p-3">
+              <h3 className="line-clamp-4 text-[13px] font-bold leading-5 group-hover:text-brand-light">
                 {a.headline}
               </h3>
             </div>
@@ -117,12 +109,7 @@ export function RecommendedSlider({ items }: { items: Article[] }) {
         ))}
       </div>
 
-      {count > 1 && (
-        <>
-          <Handle side="right" onClick={prev} />
-          <Handle side="left" onClick={next} />
-        </>
-      )}
+      {count > 1 && <Handle side="left" onClick={next} />}
     </div>
   );
 }

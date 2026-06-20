@@ -76,7 +76,7 @@ export default async function HomePage() {
       {/* בלוק העל: מימין הסיפור הראשי + המלצות לקריאה, משמאל עדכונים חיים (235px) */}
       {mainStory && (
         <section className="mb-10 flex flex-col gap-6 lg:flex-row">
-          <div className="flex min-w-0 flex-1 flex-col gap-8">
+          <div className="flex min-w-0 flex-1 flex-col gap-4">
             <FeaturedArticle article={mainStory} tall />
             <ForYou fallback={foryouFallback} excludeId={mainStory.id} />
           </div>
@@ -91,7 +91,6 @@ export default async function HomePage() {
       {latest.length > 0 && (
         <section className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <SectionHeading>מבזקים אחרונים</SectionHeading>
             <div className="border-t border-line">
               {latest.map((a) => (
                 <ArticleRow key={a.id} article={a} />
