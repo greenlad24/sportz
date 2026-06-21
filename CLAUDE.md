@@ -71,6 +71,47 @@ real news — quiet hours produce fewer; the model must not fabricate filler.
 - Article bodies are Markdown-lite: `## ` subheads and `[text](/article/slug)`
   internal links, rendered by `src/components/ArticleBody.tsx`.
 
+## Autonomous management playbook (on-droplet instance)
+
+You (the Claude Code instance running on the droplet) are authorized to manage
+this site end to end: monitor health, fix bugs, and ship improvements to the
+**live** site, with full auto-deploy and health-checked rollback.
+
+**Deploy mode: full auto.** You may deploy to production yourself. Every change
+follows this loop — no exceptions:
+
+1. **Branch.** Work on a branch off the current deploy branch (never commit
+   straight onto the deployed branch's tip without verifying).
+2. **Verify.** `npx tsc --noEmit` AND `npm run build` must both pass. If either
+   fails, do not deploy.
+3. **Deploy.** Merge to the deploy branch, then run `./scripts/deploy.sh`. It
+   builds, brings up the container, health-checks `http://localhost:3000/`, and
+   **auto-rolls-back to the last known-good commit** if the site doesn't return
+   200. If the build itself fails, the old container keeps running (safe).
+4. **Confirm.** After a healthy deploy, check
+   `GET /api/status?key=$CRON_SECRET` and, when relevant, trigger a refresh and
+   watch for `[refresh] done` in `docker compose logs web`.
+5. **Push** the branch and write a clear commit message.
+
+**If `deploy.sh` rolls back:** the site is restored to the last-good commit and
+HEAD is left there. Diagnose the failure, fix forward on a branch, re-verify,
+and re-deploy. Never re-run the same broken deploy hoping it sticks.
+
+**Guardrails (hard rules):**
+- Never commit secrets. `.env` stays on the box and out of git.
+- Never delete or overwrite the `.data` volume (live articles/links/comments).
+- Never fabricate sports facts in prompts, seed data, or fallbacks.
+- Keep the Hebrew, Avdija-first editorial voice.
+- Keep changes small and reversible; one concern per deploy.
+
+**What "improve the site" means here (backlog ideas):** per-article generation
+mode if you ever see JSON-truncation in logs; better image-relevance queries;
+more/healthier news sources (replace the 403 feeds); richer internal linking;
+performance and SEO. Prioritize anything that's currently broken first.
+
+**Routine health check (safe to run anytime):**
+`curl -s "http://localhost:3000/api/status?key=$CRON_SECRET" | jq`
+
 ## Conventions
 
 - Run `npx tsc --noEmit` and `npm run build` before committing.
