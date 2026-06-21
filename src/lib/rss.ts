@@ -53,9 +53,11 @@ async function fetchSource(source: Source): Promise<RawItem[]> {
   try {
     const res = await fetch(source.url, {
       headers: {
-        // חלק מהשירותים (Reddit/Google) דורשים user-agent
+        // User-Agent של דפדפן אמיתי: הרבה מקורות (SLAM/HoopsHype/ESPN/Feedspot)
+        // מחזירים 403 ל-user-agent של בוט. דפדפן "רגיל" עובר את החסימות האלה.
         "User-Agent":
-          "Mozilla/5.0 (compatible; SportzBot/1.0; +https://example.com)",
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "Accept-Language": "he-IL,he;q=0.9,en;q=0.8",
         Accept: "application/rss+xml, application/xml, text/xml, */*",
       },
       // לא לשמור במטמון - אנחנו רוצים מידע טרי כל 5 דקות
