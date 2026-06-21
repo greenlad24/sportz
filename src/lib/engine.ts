@@ -3,10 +3,11 @@ import { SOURCES } from "./sources";
 import { fetchAllSources } from "./rss";
 import { scrapeIsraeliSites } from "./scrape";
 import { selectCandidates, type ScoredItem } from "./relevance";
-import { generateArticles, editArticle } from "./llm";
+import { generateArticles, type GenerationContext } from "./llm";
 import { findImage, findVideo } from "./media";
 import {
   mergeArticles,
+  getArticles,
   getProcessedLinks,
   addProcessedLinks,
   addUpdates,
@@ -24,11 +25,13 @@ export interface RefreshResult {
   durationMs: number;
 }
 
-/** מחשב כמה כתבות לכל קטגוריה לפי תמהיל היעד (70/20/10) */
+/**
+ * תמהיל יעד "רך": אבדיה בעדיפות, אבל משאירים מקום למילוי משאר הקטגוריות
+ * כדי להגיע ל-total. ה-LLM ממלא את ה-total לפי החדשות שבפועל (ראה הפרומפט).
+ */
 function computeTargets(total: number): Record<Category, number> {
-  // מבטיח לפחות כתבה אחת לכל קטגוריה כשיש מספיק תקציב
-  const avdija = Math.max(1, Math.round(total * 0.7));
-  const israeli = Math.max(1, Math.round(total * 0.2));
+  const avdija = Math.max(1, Math.round(total * 0.5));
+  const israeli = Math.max(1, Math.round(total * 0.25));
   const football = Math.max(1, total - avdija - israeli);
   return {
     avdija,
@@ -43,6 +46,7 @@ function toArticle(g: GeneratedArticle): Article {
     id,
     slug: slugify(g.headline, id),
     category: g.category,
+    subcategory: (g.subcategory || "").trim() || undefined,
     headline: g.headline.trim(),
     subtitle: (g.subtitle || "").trim(),
     summary: (g.summary || "").trim(),
@@ -68,11 +72,10 @@ function validIso(value: string): string {
 export async function runRefresh(): Promise<RefreshResult> {
   const startedAt = Date.now();
 
-  // ברירת מחדל נמוכה: כתבות מעמיקות (5-7 דק') יקרות בטוקנים וכולן נכתבות
-  // בקריאה אחת. מעט כתבות מלאות למחזור מהיר ויציב (~3-4 דק'); המתזמן צובר
-  // עוד מדי שעה. ניתן לשנות ב-ENV.
-  const perRun = Number(process.env.ARTICLES_PER_RUN || 3);
-  const lookbackHours = Number(process.env.LOOKBACK_HOURS || 48);
+  // יעד: ~10 כתבות למחזור (אבדיה בעדיפות + מילוי משאר הקטגוריות), מתוך
+  // חדשות 24 השעות האחרונות. ניתן לשנות ב-ENV.
+  const perRun = Number(process.env.ARTICLES_PER_RUN || 10);
+  const lookbackHours = Number(process.env.LOOKBACK_HOURS || 24);
   const targets = computeTargets(perRun);
 
   // 1) שאיבת כל המקורות: פידי Google News (RSS) + שאיבה ישירה מאתרים ישראליים
@@ -87,9 +90,9 @@ export async function runRefresh(): Promise<RefreshResult> {
   // שולחים הרבה יותר מועמדים מהיעד: כך ל-Claude יש כמה מקורות על אותו אירוע
   // להצליב ולאחד לכתבה אחת מקיפה (ולא רק חומר לבחירה).
   const perCategoryCap: Record<Category, number> = {
-    avdija: targets.avdija + 8,
-    israeli_basketball: targets.israeli_basketball + 6,
-    world_football: targets.world_football + 5,
+    avdija: targets.avdija + 12,
+    israeli_basketball: targets.israeli_basketball + 12,
+    world_football: targets.world_football + 12,
   };
   const selected = selectCandidates(raw, {
     lookbackHours,
@@ -113,11 +116,31 @@ export async function runRefresh(): Promise<RefreshResult> {
     0,
   );
 
+  // 2.2) הקשר ל-LLM: נושאים שכבר כיסינו (דה-דופ ברמת נושא) + כתבות קיימות
+  //      לקישור פנימי. סורקים את הכתבות מהשבוע האחרון.
+  const existing = await getArticles();
+  const weekAgo = Date.now() - 7 * 24 * 36e5;
+  const recent = existing.filter(
+    (a) => new Date(a.publishedAt).getTime() >= weekAgo,
+  );
+  const llmContext: GenerationContext = {
+    total: perRun,
+    alreadyCovered: recent.slice(0, 80).map((a) => ({
+      headline: a.headline,
+      topic: a.subcategory || a.tags.slice(0, 3).join(", "),
+    })),
+    internalArticles: existing.slice(0, 40).map((a) => ({
+      slug: a.slug,
+      headline: a.headline,
+      category: a.category,
+    })),
+  };
+
   // 3) יצירת כתבות + עדכוני השעה (קריאה אחת מאוחדת ל-LLM) - רק אם יש תוכן חדש.
   const skippedLlm = candidateCount === 0;
   const generated = skippedLlm
     ? { articles: [], updates: [] }
-    : await generateArticles(candidates, targets);
+    : await generateArticles(candidates, targets, llmContext);
 
   // 3.1) מסמנים את כל הקישורים ששלחנו כ"עובדו" (גם אם לא נכתבה כתבה מכולם),
   //      כדי לא לבזבז עליהם קריאת API חוזרת בריצות הבאות.
@@ -140,8 +163,8 @@ export async function runRefresh(): Promise<RefreshResult> {
     await addUpdates(updateObjs);
   }
 
-  // 4) המרה לכתבות + העשרה לכל כתבה (במקביל, best-effort):
-  //    עריכה (AI שני), תמונה (Brave - אתרי ארה"ב + קרדיט) ווידאו (YouTube).
+  // 4) המרה לכתבות + העשרת מדיה לכל כתבה (במקביל, best-effort):
+  //    תמונה (Brave - אתרי ארה"ב, השבוע האחרון, + קרדיט) ווידאו (YouTube).
   //    תמונת המקור משמשת רק כגיבוי אם חיפוש התמונה לא החזיר תוצאה.
   const imageByLink = new Map<string, string>();
   const imageByCat: Partial<Record<Category, string>> = {};
@@ -160,22 +183,10 @@ export async function runRefresh(): Promise<RefreshResult> {
 
         const query = (g.imageQuery || g.headline || "").trim();
 
-        const [edited, image, videoId] = await Promise.all([
-          editArticle({
-            headline: base.headline,
-            subtitle: base.subtitle,
-            body: base.body,
-          }),
+        const [image, videoId] = await Promise.all([
           findImage(query),
           findVideo(query),
         ]);
-
-        if (edited) {
-          base.headline = edited.headline;
-          base.subtitle = edited.subtitle;
-          base.body = edited.body;
-          base.slug = slugify(base.headline, base.id); // הכותרת השתנתה - לרענן סלאג
-        }
 
         if (image) {
           base.imageUrl = image.url;

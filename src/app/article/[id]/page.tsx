@@ -144,8 +144,13 @@ export default async function ArticlePage({
               </Link>
             </nav>
 
-            <div className="mb-3">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
               <CategoryChip category={article.category} />
+              {article.subcategory && (
+                <span className="rounded-full bg-ink/5 px-2.5 py-1 text-xs font-semibold text-ink-soft">
+                  {article.subcategory}
+                </span>
+              )}
             </div>
             <h1 className="text-3xl font-extrabold leading-tight text-ink sm:text-4xl">
               {article.headline}

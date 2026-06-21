@@ -42,7 +42,8 @@ export const SOURCES: Source[] = [
     name: "Google News (אבדיה)",
     lang: "he",
     category: "avdija",
-    url: googleNews("דני אבדיה", "he"),
+    // חיפוש "דני אבדיה" מ-24 השעות האחרונות (when:1d)
+    url: googleNews("דני אבדיה when:1d", "he"),
     weight: 10,
   },
   {
@@ -50,7 +51,8 @@ export const SOURCES: Source[] = [
     name: "Google News (Avdija)",
     lang: "en",
     category: "avdija",
-    url: googleNews("Deni Avdija", "en"),
+    // חיפוש "Deni Avdija" מ-24 השעות האחרונות (when:1d)
+    url: googleNews("Deni Avdija when:1d", "en"),
     weight: 10,
   },
   {
@@ -58,7 +60,7 @@ export const SOURCES: Source[] = [
     name: "Google News (Blazers)",
     lang: "en",
     category: "avdija",
-    url: googleNews("Portland Trail Blazers Avdija", "en"),
+    url: googleNews("Portland Trail Blazers Avdija when:1d", "en"),
     weight: 8,
   },
   {
@@ -198,6 +200,22 @@ export const SOURCES: Source[] = [
     url: googleNews("הפועל ירושלים כדורסל", "he"),
     weight: 7,
   },
+  {
+    id: "gn-euroleague",
+    name: "Google News (יורוליג)",
+    lang: "he",
+    category: "israeli_basketball",
+    url: googleNews("יורוליג כדורסל", "he"),
+    weight: 6,
+  },
+  {
+    id: "gn-winner",
+    name: "Google News (ליגת ווינר)",
+    lang: "he",
+    category: "israeli_basketball",
+    url: googleNews("ליגת ווינר כדורסל", "he"),
+    weight: 6,
+  },
 
   // ─── כדורגל עולמי (10%) ───
   {
@@ -215,5 +233,29 @@ export const SOURCES: Source[] = [
     category: "world_football",
     url: googleNews("נבחרת ישראל כדורגל", "he"),
     weight: 6,
+  },
+  {
+    id: "gn-premier",
+    name: "Google News (פרמייר ליג)",
+    lang: "he",
+    category: "world_football",
+    url: googleNews("פרמייר ליג כדורגל", "he"),
+    weight: 5,
+  },
+  {
+    id: "gn-laliga",
+    name: "Google News (לה ליגה)",
+    lang: "he",
+    category: "world_football",
+    url: googleNews("לה ליגה ריאל מדריד ברצלונה", "he"),
+    weight: 5,
+  },
+  {
+    id: "gn-transfers",
+    name: "Google News (העברות)",
+    lang: "he",
+    category: "world_football",
+    url: googleNews("העברות כדורגל אירופה", "he"),
+    weight: 4,
   },
 ];

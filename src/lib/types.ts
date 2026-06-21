@@ -19,6 +19,7 @@ export interface Article {
   id: string;
   slug: string;
   category: Category;
+  subcategory?: string; // תת-קטגוריה חופשית שה-AI מקצה (למשל "פלייאוף NBA", "יורוליג")
   headline: string; // כותרת ראשית
   subtitle: string; // כותרת משנה
   summary: string; // תקציר קצר לכרטיס / meta description
@@ -37,6 +38,7 @@ export interface Article {
 /** מבנה הפלט שמבקשים מ-Claude */
 export interface GeneratedArticle {
   category: Category;
+  subcategory?: string;
   headline: string;
   subtitle: string;
   summary: string;
