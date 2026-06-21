@@ -11,6 +11,7 @@ export function ArticleCard({ article }: { article: Article }) {
         <ArticleImage
           category={article.category}
           src={article.imageUrl}
+          alt={article.headline}
           className="aspect-[16/9] w-full"
         />
         <div className="p-4">

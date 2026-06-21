@@ -104,6 +104,7 @@ export function RecommendedSlider({ items }: { items: Article[] }) {
               <ArticleImage
                 category={a.category}
                 src={a.imageUrl}
+                alt={a.headline}
                 className="h-full w-full"
               />
             </div>

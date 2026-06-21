@@ -189,6 +189,7 @@ export default async function ArticlePage({
               <ArticleImage
                 category={article.category}
                 src={article.imageUrl}
+                alt={article.headline}
                 className="aspect-[16/9] w-full rounded-xl"
               />
               {article.imageCredit && (

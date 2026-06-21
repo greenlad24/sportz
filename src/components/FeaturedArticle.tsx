@@ -28,6 +28,7 @@ export function FeaturedArticle({
           <ArticleImage
             category={article.category}
             src={article.imageUrl}
+            alt={article.headline}
             className={imageClass}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />

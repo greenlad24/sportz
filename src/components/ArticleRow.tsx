@@ -30,6 +30,7 @@ export function ArticleRow({ article }: { article: Article }) {
         <ArticleImage
           category={article.category}
           src={article.imageUrl}
+          alt={article.headline}
           className="h-[120px] w-[170px] rounded-lg sm:h-[130px] sm:w-[200px]"
         />
       </div>

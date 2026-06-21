@@ -14,10 +14,12 @@ const GRADIENTS: Record<Category, string> = {
 export function ArticleImage({
   category,
   src,
+  alt = "",
   className = "",
 }: {
   category: Category;
   src?: string;
+  alt?: string;
   className?: string;
 }) {
   if (src) {
@@ -25,7 +27,7 @@ export function ArticleImage({
     return (
       <img
         src={src}
-        alt=""
+        alt={alt}
         loading="lazy"
         className={`object-cover ${className}`}
       />
