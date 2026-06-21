@@ -38,6 +38,9 @@ function braveThrottle<T>(fn: () => Promise<T>): Promise<T> {
   return result;
 }
 
+// סימון 429 כשגיאה נפרדת (להבדיל מ"לא נמצאה תמונה") כדי שנוכל לנסות שוב.
+class BraveRateLimitedError extends Error {}
+
 async function braveImageSearch(
   query: string,
   freshness?: string,
@@ -62,8 +65,7 @@ async function braveImageSearch(
     },
   );
   if (res.status === 429) {
-    console.warn("[media] brave image -> 429 (rate limited)");
-    return null;
+    throw new BraveRateLimitedError();
   }
   if (!res.ok) {
     console.warn(`[media] brave image -> HTTP ${res.status}`);
@@ -98,12 +100,36 @@ async function braveImageSearch(
  * מנסה קודם תמונה מהשבוע האחרון; אם אין - מרחיב לכל זמן (עדיף תמונה רלוונטית
  * מעט ישנה מאשר כתבה בלי תמונה). כל הקריאות עוברות דרך וִיסות (1/שנייה).
  */
+// קריאה ל-Brave דרך הוִיסות, עם ניסיון חוזר אחד על 429 (השהיה קצרה לפני הניסיון
+// השני) כדי לא לאבד תמונה בגלל גל בקשות חולף.
+async function braveSearchWithRetry(
+  query: string,
+  freshness?: string,
+): Promise<FoundImage | null> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await braveThrottle(() => braveImageSearch(query, freshness));
+    } catch (err) {
+      if (err instanceof BraveRateLimitedError) {
+        if (attempt === 0) {
+          await new Promise((r) => setTimeout(r, 2000));
+          continue; // ניסיון נוסף אחרי השהיה
+        }
+        console.warn("[media] brave image -> 429 (rate limited, gave up)");
+        return null;
+      }
+      throw err; // שגיאה אחרת - תיתפס ב-findImage
+    }
+  }
+  return null;
+}
+
 export async function findImage(query: string): Promise<FoundImage | null> {
   if (!BRAVE_KEY || !query.trim()) return null;
   try {
-    const recent = await braveThrottle(() => braveImageSearch(query, "pw"));
+    const recent = await braveSearchWithRetry(query, "pw");
     if (recent) return recent;
-    return await braveThrottle(() => braveImageSearch(query));
+    return await braveSearchWithRetry(query);
   } catch (err) {
     console.warn(`[media] findImage failed: ${(err as Error).message}`);
     return null;
