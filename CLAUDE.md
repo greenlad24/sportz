@@ -77,21 +77,25 @@ You (the Claude Code instance running on the droplet) are authorized to manage
 this site end to end: monitor health, fix bugs, and ship improvements to the
 **live** site, with full auto-deploy and health-checked rollback.
 
+**Branch model: `master` is the single source of truth.** You work directly on
+`master` and push to it. Always `git pull --rebase origin master` before you
+start so you don't diverge.
+
 **Deploy mode: full auto.** You may deploy to production yourself. Every change
 follows this loop — no exceptions:
 
-1. **Branch.** Work on a branch off the current deploy branch (never commit
-   straight onto the deployed branch's tip without verifying).
+1. **Sync.** `git checkout master && git pull --rebase origin master`.
 2. **Verify.** `npx tsc --noEmit` AND `npm run build` must both pass. If either
    fails, do not deploy.
-3. **Deploy.** Merge to the deploy branch, then run `./scripts/deploy.sh`. It
-   builds, brings up the container, health-checks `http://localhost:3000/`, and
-   **auto-rolls-back to the last known-good commit** if the site doesn't return
-   200. If the build itself fails, the old container keeps running (safe).
+3. **Deploy.** Run `./scripts/deploy.sh`. It builds, brings up the container,
+   health-checks `http://localhost:3000/`, and **auto-rolls-back to the last
+   known-good commit** if the site doesn't return 200. If the build itself
+   fails, the old container keeps running (safe).
 4. **Confirm.** After a healthy deploy, check
    `GET /api/status?key=$CRON_SECRET` and, when relevant, trigger a refresh and
    watch for `[refresh] done` in `docker compose logs web`.
-5. **Push** the branch and write a clear commit message.
+5. **Commit & push** to `master` with a clear message. Only push code that
+   passed step 2 and deployed healthy in step 3.
 
 **If `deploy.sh` rolls back:** the site is restored to the last-good commit and
 HEAD is left there. Diagnose the failure, fix forward on a branch, re-verify,
