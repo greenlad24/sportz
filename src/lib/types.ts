@@ -22,12 +22,14 @@ export interface Article {
   headline: string; // כותרת ראשית
   subtitle: string; // כותרת משנה
   summary: string; // תקציר קצר לכרטיס / meta description
-  body: string; // גוף הכתבה (פסקאות מופרדות בשורה ריקה)
+  body: string; // גוף הכתבה (פסקאות מופרדות בשורה ריקה; כותרות משנה ב-## )
   tags: string[];
   importance: number; // 1-10
   sourceName: string;
   sourceUrl: string;
   imageUrl?: string;
+  imageCredit?: { source: string; link: string }; // קרדיט לתמונה (Google, אתרי ארה"ב)
+  videoId?: string; // מזהה סרטון YouTube להטמעה בתוך הכתבה (אם נמצא)
   publishedAt: string; // ISO - זמן האירוע/המקור
   createdAt: string; // ISO - זמן יצירת הכתבה אצלנו
 }
@@ -44,6 +46,8 @@ export interface GeneratedArticle {
   sourceName: string;
   sourceUrl: string;
   publishedAt: string;
+  /** מונחי חיפוש באנגלית לאיתור תמונה/וידאו רלוונטיים (אתרי ארה"ב) */
+  imageQuery?: string;
 }
 
 /** "עדכון" = עובדה מאומתת/מקור שעליו מבוססות הכתבות (הרכב, תוצאה, דיווח, שמועה) */

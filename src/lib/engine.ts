@@ -3,7 +3,8 @@ import { SOURCES } from "./sources";
 import { fetchAllSources } from "./rss";
 import { scrapeIsraeliSites } from "./scrape";
 import { selectCandidates, type ScoredItem } from "./relevance";
-import { generateArticles } from "./llm";
+import { generateArticles, editArticle } from "./llm";
+import { findImage, findVideo } from "./media";
 import {
   mergeArticles,
   getProcessedLinks,
@@ -139,7 +140,9 @@ export async function runRefresh(): Promise<RefreshResult> {
     await addUpdates(updateObjs);
   }
 
-  // 4) המרה לכתבות + שיוך תמונה מהמקור (לפי הקישור, אחרת תמונה כללית מהקטגוריה)
+  // 4) המרה לכתבות + העשרה לכל כתבה (במקביל, best-effort):
+  //    עריכה (AI שני), תמונה (Brave - אתרי ארה"ב + קרדיט) ווידאו (YouTube).
+  //    תמונת המקור משמשת רק כגיבוי אם חיפוש התמונה לא החזיר תוצאה.
   const imageByLink = new Map<string, string>();
   const imageByCat: Partial<Record<Category, string>> = {};
   for (const it of Object.values(candidates).flat()) {
@@ -149,13 +152,46 @@ export async function runRefresh(): Promise<RefreshResult> {
     }
   }
 
-  const articles = generated.articles
-    .map(toArticle)
-    .map((a) => ({
-      ...a,
-      imageUrl: imageByLink.get(a.sourceUrl) || imageByCat[a.category],
-    }))
-    .filter((a) => a.headline);
+  const articles = (
+    await Promise.all(
+      generated.articles.map(async (g) => {
+        const base = toArticle(g);
+        if (!base.headline) return null;
+
+        const query = (g.imageQuery || g.headline || "").trim();
+
+        const [edited, image, videoId] = await Promise.all([
+          editArticle({
+            headline: base.headline,
+            subtitle: base.subtitle,
+            body: base.body,
+          }),
+          findImage(query),
+          findVideo(query),
+        ]);
+
+        if (edited) {
+          base.headline = edited.headline;
+          base.subtitle = edited.subtitle;
+          base.body = edited.body;
+          base.slug = slugify(base.headline, base.id); // הכותרת השתנתה - לרענן סלאג
+        }
+
+        if (image) {
+          base.imageUrl = image.url;
+          base.imageCredit = { source: image.source, link: image.link };
+        } else {
+          base.imageUrl =
+            imageByLink.get(base.sourceUrl) || imageByCat[base.category];
+        }
+
+        if (videoId) base.videoId = videoId;
+
+        return base;
+      }),
+    )
+  ).filter((a): a is Article => a !== null);
+
   const added = articles.length > 0 ? await mergeArticles(articles) : [];
 
   const perCategory: Record<Category, number> = {

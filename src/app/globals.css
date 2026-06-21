@@ -23,6 +23,19 @@ body {
   @apply mb-0;
 }
 
+/* כותרות משנה בתוך גוף הכתבה */
+.article-body h2 {
+  @apply mb-3 mt-7 text-2xl font-extrabold leading-snug text-ink;
+}
+
+.article-body h3 {
+  @apply mb-2 mt-5 text-xl font-bold leading-snug text-ink;
+}
+
+.article-body strong {
+  @apply font-bold text-ink;
+}
+
 /* כותרת מקטע בסגנון פורטל - פס צבע + טקסט בולט */
 .section-bar {
   @apply mb-4 flex items-center gap-2.5;
