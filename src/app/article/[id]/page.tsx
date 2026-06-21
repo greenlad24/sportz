@@ -5,6 +5,7 @@ import { getArticleBySlug, getArticles } from "@/lib/store";
 import { CATEGORIES } from "@/lib/categories";
 import { CategoryChip } from "@/components/CategoryChip";
 import { ArticleImage } from "@/components/ArticleImage";
+import { ArticleBody } from "@/components/ArticleBody";
 import { ArticleCard } from "@/components/ArticleCard";
 import { ViewTracker } from "@/components/ViewTracker";
 import { CommentsSection } from "@/components/CommentsSection";
@@ -100,7 +101,6 @@ export default async function ArticlePage({
     .filter((a) => a.category === article.category && a.id !== article.id)
     .slice(0, 3);
 
-  const paragraphs = article.body.split(/\n\s*\n/).filter(Boolean);
   const url = absoluteUrl(`/article/${article.slug}`);
 
   const jsonLd = {
@@ -164,19 +164,42 @@ export default async function ArticlePage({
             </div>
           </header>
 
-          {/* תמונת כותרת */}
-          <ArticleImage
-            category={article.category}
-            src={article.imageUrl}
-            className="mb-6 aspect-[16/9] w-full rounded-xl"
-          />
+          {/* מדיה: סרטון YouTube אם נמצא, אחרת תמונה + קרדיט */}
+          {article.videoId ? (
+            <div className="mb-6 aspect-video w-full overflow-hidden rounded-xl bg-black">
+              <iframe
+                src={`https://www.youtube.com/embed/${article.videoId}`}
+                title={article.headline}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="h-full w-full border-0"
+              />
+            </div>
+          ) : (
+            <figure className="mb-6">
+              <ArticleImage
+                category={article.category}
+                src={article.imageUrl}
+                className="aspect-[16/9] w-full rounded-xl"
+              />
+              {article.imageCredit && (
+                <figcaption className="mt-1.5 text-xs text-ink-muted">
+                  קרדיט תמונה:{" "}
+                  <a
+                    href={article.imageCredit.link}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    className="hover:text-brand hover:underline"
+                  >
+                    {article.imageCredit.source}
+                  </a>
+                </figcaption>
+              )}
+            </figure>
+          )}
 
           {/* גוף הכתבה */}
-          <div className="article-body text-lg">
-            {paragraphs.map((p, i) => (
-              <p key={i}>{p}</p>
-            ))}
-          </div>
+          <ArticleBody body={article.body} />
 
           {article.tags.length > 0 && (
             <div className="mt-6 flex flex-wrap gap-2">
