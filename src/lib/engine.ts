@@ -67,9 +67,10 @@ function validIso(value: string): string {
 export async function runRefresh(): Promise<RefreshResult> {
   const startedAt = Date.now();
 
-  // ברירת מחדל נמוכה יחסית: כתבות מעמיקות (5-7 דק') יקרות בטוקנים, וכולן
-  // נכתבות בקריאה אחת. עדיף מעט כתבות מלאות מאשר הרבה קצרות. ניתן לשנות ב-ENV.
-  const perRun = Number(process.env.ARTICLES_PER_RUN || 5);
+  // ברירת מחדל נמוכה: כתבות מעמיקות (5-7 דק') יקרות בטוקנים וכולן נכתבות
+  // בקריאה אחת. מעט כתבות מלאות למחזור מהיר ויציב (~3-4 דק'); המתזמן צובר
+  // עוד מדי שעה. ניתן לשנות ב-ENV.
+  const perRun = Number(process.env.ARTICLES_PER_RUN || 3);
   const lookbackHours = Number(process.env.LOOKBACK_HOURS || 48);
   const targets = computeTargets(perRun);
 

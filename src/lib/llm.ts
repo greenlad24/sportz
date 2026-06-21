@@ -8,11 +8,11 @@ const PROVIDER = (process.env.LLM_PROVIDER || "anthropic").toLowerCase();
 
 const ANTHROPIC_MODEL = process.env.CLAUDE_MODEL || "claude-opus-4-8";
 
-// תקציב טוקנים נדיב לקריאה אחת המייצרת כמה כתבות ארוכות + עדכוני שעה.
+// תקציב טוקנים לקריאה אחת המייצרת כמה כתבות ארוכות + עדכוני שעה.
 // כתבה אחת של 5-7 דקות ≈ 900-1400 מילים ≈ 2500-3500 טוקנים בעברית.
-// תקציב גבוה מונע קטיעה של ה-JSON (שמובילה לאפס כתבות). הקריאה היא streaming,
-// כך שאין מגבלת 10 הדקות של ה-SDK. ניתן לשנות ב-ENV.
-const MAX_TOKENS = Number(process.env.LLM_MAX_TOKENS || 28000);
+// מאוזן למחזור מהיר ויציב (~3-4 דק'): כמה כתבות מלאות, לא עשרות. streaming
+// מסיר את מגבלת 10 הדקות של ה-SDK. ניתן לשנות ב-ENV.
+const MAX_TOKENS = Number(process.env.LLM_MAX_TOKENS || 16000);
 
 /**
  * מדריך הסגנון + ההנחיות. פרומפט יציב (לא משתנה בין ריצות) ולכן בספק Anthropic
