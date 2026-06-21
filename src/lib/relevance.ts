@@ -41,6 +41,8 @@ const KEYWORDS: Record<Category, { term: string; score: number }[]> = {
 
 export interface ScoredItem extends RawItem {
   score: number;
+  /** מקורות נוספים שסיקרו את *אותו* סיפור (להצלבה רב-מקורית ולגיבוש כותרת מקורית) */
+  related?: ScoredItem[];
 }
 
 /**
@@ -116,15 +118,27 @@ export function selectCandidates(
     .map((it) => ({ ...it, score: scoreItem(it) }))
     .sort((a, b) => b.score - a.score);
 
-  // הסרת כפילויות: אם כותרת דומה מאוד לכותרת שכבר נבחרה, דלג
+  // אשכול במקום זריקה: כשכמה מקורות מסקרים את אותו סיפור (כותרת דומה, אותה
+  // קטגוריה), במקום להשליך את הכפילויות מצרפים אותן כ"מקורות נוספים" לפריט
+  // המוביל. כך ל-LLM יש כמה מקורות על אותו אירוע להצלבה ולגיבוש כותרת מקורית
+  // (לא העתקה מכותרת מקור יחיד). שומרים עד 4 מקורות-משנה, מקורות שונים בלבד.
+  const MAX_RELATED = 4;
   const kept: ScoredItem[] = [];
   for (const it of scored) {
-    const dup = kept.some(
+    if (kept.some((k) => k.link === it.link)) continue; // כפילות מדויקת - דלג
+    const host = kept.find(
       (k) =>
-        k.link === it.link ||
-        (k.category === it.category && wordSimilarity(k.title, it.title) > 0.55),
+        k.category === it.category && wordSimilarity(k.title, it.title) > 0.55,
     );
-    if (!dup) kept.push(it);
+    if (host) {
+      // צרף רק מקור *שונה* (גיוון מקורות הוא כל העניין), עד התקרה
+      const known = new Set([host.source, ...(host.related ?? []).map((r) => r.source)]);
+      if ((host.related?.length ?? 0) < MAX_RELATED && !known.has(it.source)) {
+        (host.related ??= []).push(it);
+      }
+      continue;
+    }
+    kept.push(it);
   }
 
   const byCat: Record<Category, ScoredItem[]> = {

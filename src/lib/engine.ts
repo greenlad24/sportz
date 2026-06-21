@@ -131,8 +131,12 @@ export async function runRefresh(): Promise<RefreshResult> {
     const toEnrich = (Object.keys(candidates) as Category[]).flatMap((cat) =>
       candidates[cat].slice(0, targets[cat] + 3),
     );
-    const enriched = await enrichWithArticleText(toEnrich);
-    console.log(`[enrich] full text: ${enriched}/${toEnrich.length} candidates`);
+    // העשרה רב-מקורית: גם מקורות-המשנה של הסיפורים המובילים (עד 2 לכל סיפור),
+    // כדי שלכתבה יהיה "בשר" מכמה מקורות להצלבה - לא תלות במקור יחיד.
+    const relatedToEnrich = toEnrich.flatMap((p) => (p.related ?? []).slice(0, 2));
+    const enrichList = [...toEnrich, ...relatedToEnrich];
+    const enriched = await enrichWithArticleText(enrichList);
+    console.log(`[enrich] full text: ${enriched}/${enrichList.length} candidates`);
   }
 
   // 2.2) הקשר ל-LLM: נושאים שכבר כיסינו (דה-דופ ברמת נושא) + כתבות קיימות
