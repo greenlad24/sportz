@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runRefresh } from "@/lib/engine";
+import {
+  getRunState,
+  markRunStart,
+  markRunDone,
+  markRunError,
+} from "@/lib/runState";
 
 // תמיד דינמי, ללא מטמון - זו נקודת ה-cron
 export const dynamic = "force-dynamic";
@@ -18,31 +24,27 @@ function authorized(req: NextRequest): boolean {
   return key === secret;
 }
 
-// נעילה פשוטה בזיכרון התהליך כדי שלא ירוצו שתי ריצות במקביל.
-let isRunning = false;
-
 async function handle(req: NextRequest) {
   if (!authorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  if (isRunning) {
+  if (getRunState().isRunning) {
     return NextResponse.json({ ok: true, started: false, reason: "already running" });
   }
 
-  isRunning = true;
+  markRunStart();
   // הרצה ברקע: מחזירים תשובה מיד (פחות משנייה) והכתבות נכתבות אחר כך.
   // מתאים לדרופלט (תהליך Node מתמשך שלא "קופא" אחרי התשובה). העמודים דינמיים,
   // ולכן אין צורך ב-revalidate - כתבות חדשות מופיעות מיד כשהן נשמרות.
   runRefresh()
     .then((result) => {
       console.log("[refresh] done:", JSON.stringify(result));
+      markRunDone(result);
     })
     .catch((err) => {
       console.error("[refresh] failed:", err);
-    })
-    .finally(() => {
-      isRunning = false;
+      markRunError(err);
     });
 
   return NextResponse.json({ ok: true, started: true });
