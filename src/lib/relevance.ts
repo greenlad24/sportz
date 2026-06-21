@@ -66,6 +66,45 @@ export function inferCategory(text: string): Category | null {
   return bestScore >= 4 ? best : null;
 }
 
+// אתר נקי מפוליטיקה: פריטים פוליטיים (מלחמה, דיפלומטיה, פוליטיקה פנים/חוץ,
+// איראן/פלסטין/מדינות ערב בהקשר מדיני) נחסמים לפני שהם מגיעים ל-LLM.
+// הרשימה שמרנית בכוונה - רק מונחים פוליטיים חד-משמעיים ושמות-עצם פרטיים
+// שאין להם משמעות ספורטיבית. שמות מדינות לבדם *אינם* כאן: לאיראן ולפלסטין
+// יש נבחרות כדורגל, וסיקור ספורטיבי שלהן מותר. ההבחנה הדקה (ספורט מול מדיניות)
+// נאכפת גם בהנחיות ה-LLM. נמנעים גם ממילים שמשמשות כמטאפורה בספורט
+// (מלחמה/טיל/התקפה) כדי לא לפסול כתבות ספורט לגיטימיות.
+const POLITICAL_TERMS = [
+  // שמות פרטיים פוליטיים
+  "נתניהו",
+  "טראמפ",
+  "ביידן",
+  "פוטין",
+  "חמאס",
+  "חיזבאללה",
+  "חזבאללה",
+  "netanyahu",
+  "hamas",
+  "hezbollah",
+  // מונחים מדיניים/ביטחוניים חד-משמעיים
+  "פוליטי", // פוליטי/פוליטית/פוליטיקה
+  "ממשל", // ממשלה/ממשלת/ממשל
+  "דיפלומט",
+  "רצועת עזה",
+  "הגדה המערבית",
+  "פיגוע",
+  "הפסקת אש",
+  "politic",
+  "gaza",
+  "airstrike",
+  "ceasefire",
+];
+
+/** האם הפריט פוליטי (ולכן לא מתאים לאתר ספורט נקי-פוליטיקה) */
+export function isPolitical(text: string): boolean {
+  const hay = text.toLowerCase();
+  return POLITICAL_TERMS.some((t) => hay.includes(t.toLowerCase()));
+}
+
 function sourceWeight(sourceName: string): number {
   return SOURCES.find((s) => s.name === sourceName)?.weight ?? 3;
 }
@@ -109,6 +148,8 @@ export function selectCandidates(
 
   const scored: ScoredItem[] = items
     .filter((it) => new Date(it.publishedAt).getTime() >= cutoff)
+    // שער "נקי מפוליטיקה": חוסם פריטים פוליטיים לפני ניקוד/שליחה ל-LLM.
+    .filter((it) => !isPolitical(`${it.title} ${it.summary}`))
     // שער רלוונטיות לפי מילות-מפתח: פיד NBA רחב חייב להזכיר אבדיה/בלייזרס
     // במפורש (סף 5), מקור ממוקד דורש רק רמז אחד (סף 1).
     .filter((it) => {
