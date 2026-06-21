@@ -31,6 +31,7 @@ export async function findImage(query: string): Promise<FoundImage | null> {
         search_lang: "en",
         count: "15",
         safesearch: "strict",
+        freshness: "pw", // השבוע האחרון - תמונה עדכנית לסיפור
       }).toString();
 
     const res = await fetch(url, {

@@ -6,15 +6,33 @@ import React from "react";
 //  - **טקסט** בתוך פסקה -> הדגשה (strong)
 //  - שורה ריקה מפרידה פסקאות
 
+// תומך ב-**הדגשה** וב-[טקסט](/article/slug) קישור פנימי
 function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
-  const re = /\*\*(.+?)\*\*/g;
+  const re = /\*\*(.+?)\*\*|\[([^\]]+)\]\(([^)]+)\)/g;
   let last = 0;
   let i = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) nodes.push(text.slice(last, m.index));
-    nodes.push(<strong key={`${keyPrefix}-b${i++}`}>{m[1]}</strong>);
+    if (m[1] !== undefined) {
+      nodes.push(<strong key={`${keyPrefix}-b${i++}`}>{m[1]}</strong>);
+    } else {
+      const href = m[3];
+      const internal = href.startsWith("/");
+      nodes.push(
+        <a
+          key={`${keyPrefix}-a${i++}`}
+          href={href}
+          className="font-medium text-brand hover:underline"
+          {...(internal
+            ? {}
+            : { target: "_blank", rel: "noopener noreferrer nofollow" })}
+        >
+          {m[2]}
+        </a>,
+      );
+    }
     last = m.index + m[0].length;
   }
   if (last < text.length) nodes.push(text.slice(last));
