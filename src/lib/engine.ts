@@ -17,6 +17,7 @@ import {
   getProcessedLinks,
   addProcessedLinks,
   addUpdates,
+  getBroadcasts,
 } from "./store";
 import { hashId, slugify } from "./utils";
 import { CATEGORIES } from "./categories";
@@ -150,6 +151,22 @@ export async function runRefresh(): Promise<RefreshResult> {
   const recent = existing.filter(
     (a) => new Date(a.publishedAt).getTime() >= weekAgo,
   );
+  // לוח השידורים הקרוב (אם נשאב) - מועבר ל-LLM כדי שישבץ זמני שידור מקושרים
+  // בכתבות. מוגבל לימים הקרובים ולמספר שורות סביר כדי לא לנפח טוקנים.
+  const broadcasts = await getBroadcasts();
+  const upcomingBroadcasts = (broadcasts?.days ?? [])
+    .slice(0, 3)
+    .flatMap((d) =>
+      d.items.map((b) => ({
+        dayLabel: d.dayLabel,
+        dmy: d.dmy,
+        time: b.time,
+        channel: b.channel,
+        event: b.event,
+      })),
+    )
+    .slice(0, 60);
+
   const llmContext: GenerationContext = {
     total: perRun,
     alreadyCovered: recent.slice(0, 80).map((a) => ({
@@ -161,6 +178,7 @@ export async function runRefresh(): Promise<RefreshResult> {
       headline: a.headline,
       category: a.category,
     })),
+    upcomingBroadcasts,
   };
 
   // 3) יצירת כתבות + עדכוני השעה (קריאה אחת מאוחדת ל-LLM) - רק אם יש תוכן חדש.

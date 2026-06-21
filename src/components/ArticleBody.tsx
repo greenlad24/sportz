@@ -20,16 +20,22 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
     } else {
       const href = m[3];
       const internal = href.startsWith("/");
+      // תג זמן שידור (קישור ללוח השידורים) - מוצג כצ'יפ בולט עם אייקון
+      const isBroadcast = href === "/schedule";
       nodes.push(
         <a
           key={`${keyPrefix}-a${i++}`}
           href={href}
-          className="font-medium text-brand hover:underline"
+          className={
+            isBroadcast
+              ? "mx-0.5 inline-flex items-center gap-1 rounded bg-paper-soft px-1.5 py-0.5 text-[0.85em] font-bold text-brand align-baseline hover:bg-brand hover:text-white"
+              : "font-medium text-brand hover:underline"
+          }
           {...(internal
             ? {}
             : { target: "_blank", rel: "noopener noreferrer nofollow" })}
         >
-          {m[2]}
+          {isBroadcast ? `📺 ${m[2]}` : m[2]}
         </a>,
       );
     }
