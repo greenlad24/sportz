@@ -41,6 +41,41 @@ function braveThrottle<T>(fn: () => Promise<T>): Promise<T> {
 // סימון 429 כשגיאה נפרדת (להבדיל מ"לא נמצאה תמונה") כדי שנוכל לנסות שוב.
 class BraveRateLimitedError extends Error {}
 
+// סף איכות לתמונות כתבה (לפי בקשת המשתמש: תמונה איכותית בלבד, אחרת שום תמונה).
+// Brave מחזיר לכל תוצאה את מידות התמונה המלאה (properties.width/height) ורמת
+// ביטחון ברלוונטיות (confidence). מסננים תמונות קטנות/מפוקסלות, לוגואים/באנרים
+// (יחס צורה קיצוני או ריבועי) ותוצאות בביטחון נמוך.
+const IMG_MIN_WIDTH = 600; // רוחב מינימלי בפיקסלים
+const IMG_MIN_HEIGHT = 360; // גובה מינימלי (מאפשר 16:9 מרוחב ~640 ומעלה)
+const IMG_MIN_ASPECT = 1.2; // פוסל ריבוע/פורטרט (לרוב לוגו/אווטאר)
+const IMG_MAX_ASPECT = 2.2; // פוסל באנרים/רצועות רחבות
+
+interface BraveImageResult {
+  url?: string;
+  source?: string;
+  properties?: { url?: string; width?: number; height?: number };
+  thumbnail?: { src?: string; width?: number; height?: number };
+  meta_url?: { hostname?: string };
+  confidence?: string;
+}
+
+/**
+ * האם התמונה עומדת בסף האיכות: מידות מינימליות, יחס צורה של תמונת כתבה
+ * (לרוחב, לא ריבוע/פורטרט/באנר) וביטחון רלוונטיות שאינו נמוך. מודדים לפי
+ * המידות של התמונה המלאה (properties), ובהיעדרן לפי התמונה הממוזערת.
+ * אם אין מידות כלל - לא ניתן לאשר איכות, ולכן פוסלים.
+ */
+function isHighQuality(r: BraveImageResult): boolean {
+  if ((r.confidence || "").toLowerCase() === "low") return false;
+  const w = r.properties?.width || r.thumbnail?.width || 0;
+  const h = r.properties?.height || r.thumbnail?.height || 0;
+  if (!w || !h) return false;
+  if (w < IMG_MIN_WIDTH || h < IMG_MIN_HEIGHT) return false;
+  const aspect = w / h;
+  if (aspect < IMG_MIN_ASPECT || aspect > IMG_MAX_ASPECT) return false;
+  return true;
+}
+
 async function braveImageSearch(
   query: string,
   freshness?: string,
@@ -71,21 +106,16 @@ async function braveImageSearch(
     console.warn(`[media] brave image -> HTTP ${res.status}`);
     return null;
   }
-  const data = (await res.json()) as {
-    results?: Array<{
-      url?: string;
-      source?: string;
-      properties?: { url?: string };
-      thumbnail?: { src?: string };
-      meta_url?: { hostname?: string };
-    }>;
-  };
+  const data = (await res.json()) as { results?: BraveImageResult[] };
 
+  // התוצאות מדורגות לפי רלוונטיות; בוחרים את הראשונה שהיא גם רלוונטית וגם
+  // עומדת בסף האיכות. כך לא מורידים תמונה מפוקסלת/זעירה/לוגו לכתבה.
   for (const r of data.results ?? []) {
     const imageUrl = r.properties?.url || r.thumbnail?.src;
     const host = r.meta_url?.hostname || r.source || "";
     if (!imageUrl || !host) continue;
     if (isIsraeliHost(host)) continue; // אתרי ארה"ב בלבד
+    if (!isHighQuality(r)) continue; // איכות בלבד - אחרת מדלגים
     return {
       url: imageUrl,
       source: host.replace(/^www\./, ""),
