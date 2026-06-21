@@ -10,8 +10,9 @@ const ANTHROPIC_MODEL = process.env.CLAUDE_MODEL || "claude-opus-4-8";
 
 // תקציב טוקנים נדיב לקריאה אחת המייצרת כמה כתבות ארוכות + עדכוני שעה.
 // כתבה אחת של 5-7 דקות ≈ 900-1400 מילים ≈ 2500-3500 טוקנים בעברית.
-// תקציב גבוה מונע קטיעה של ה-JSON (שמובילה לאפס כתבות). ניתן לשנות ב-ENV.
-const MAX_TOKENS = Number(process.env.LLM_MAX_TOKENS || 32000);
+// תקציב גבוה מונע קטיעה של ה-JSON (שמובילה לאפס כתבות). הקריאה היא streaming,
+// כך שאין מגבלת 10 הדקות של ה-SDK. ניתן לשנות ב-ENV.
+const MAX_TOKENS = Number(process.env.LLM_MAX_TOKENS || 28000);
 
 /**
  * מדריך הסגנון + ההנחיות. פרומפט יציב (לא משתנה בין ריצות) ולכן בספק Anthropic
@@ -149,7 +150,9 @@ function buildAnthropic(): {
 
 async function callAnthropic(userMessage: string): Promise<string> {
   const { client, requestOptions } = buildAnthropic();
-  const response = await client.messages.create(
+  // חובה להשתמש ב-streaming: עם max_tokens גדול ה-SDK חוסם בקשות non-streaming
+  // שעלולות להימשך מעל 10 דקות ("Streaming is required ..."). streaming מסיר את המגבלה.
+  const stream = client.messages.stream(
     {
       model: ANTHROPIC_MODEL,
       max_tokens: MAX_TOKENS,
@@ -164,7 +167,8 @@ async function callAnthropic(userMessage: string): Promise<string> {
     },
     requestOptions,
   );
-  const block = response.content.find((b) => b.type === "text");
+  const final = await stream.finalMessage();
+  const block = final.content.find((b) => b.type === "text");
   return block && "text" in block ? block.text : "";
 }
 
