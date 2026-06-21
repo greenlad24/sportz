@@ -25,6 +25,7 @@ export async function generateMetadata({
   const article = await getArticleBySlug(params.id);
   if (!article) return {};
   const url = `/article/${article.slug}`;
+  const images = article.imageUrl ? [article.imageUrl] : undefined;
   return {
     title: article.headline,
     description: article.summary,
@@ -35,6 +36,7 @@ export async function generateMetadata({
       title: article.headline,
       description: article.summary,
       url,
+      images,
       publishedTime: article.publishedAt,
       modifiedTime: article.createdAt,
       section: CATEGORIES[article.category].label,
@@ -44,6 +46,7 @@ export async function generateMetadata({
       card: "summary_large_image",
       title: article.headline,
       description: article.summary,
+      images,
     },
   };
 }
@@ -108,6 +111,7 @@ export default async function ArticlePage({
     "@type": "NewsArticle",
     headline: article.headline,
     description: article.summary,
+    ...(article.imageUrl ? { image: [article.imageUrl] } : {}),
     datePublished: article.publishedAt,
     dateModified: article.createdAt,
     articleSection: CATEGORIES[article.category].label,
