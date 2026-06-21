@@ -74,6 +74,28 @@ export interface Comment {
   createdAt: string; // ISO
 }
 
+/** שידור בודד בלוח השידורים (משחק/תכנית בערוץ ספורט, בשעה נתונה) */
+export interface Broadcast {
+  channel: string; // שם הערוץ, למשל "ערוץ הספורט"
+  time: string; // "20:00" (שעון ישראל)
+  event: string; // "ליגת העל בכדורסל: מכבי ת\"א - הפועל ת\"א"
+  isLive: boolean; // שידור ישיר
+}
+
+/** יום בלוח השידורים: תאריך + רשימת השידורים שלו */
+export interface BroadcastDay {
+  date: string; // "YYYY-MM-DD" (שעון ישראל) - מפתח
+  dmy: string; // "DD/MM/YYYY" - תצוגה
+  dayLabel: string; // "יום ראשון"
+  items: Broadcast[];
+}
+
+/** לוח השידורים השמור (כולל חותמת זמן השאיבה, לבקרת רעננות) */
+export interface BroadcastStore {
+  fetchedAt: string; // ISO - מתי נשאב לאחרונה מהמקור
+  days: BroadcastDay[];
+}
+
 /** מבנה הפלט המלא של ה-LLM */
 export interface LlmOutput {
   articles: GeneratedArticle[];

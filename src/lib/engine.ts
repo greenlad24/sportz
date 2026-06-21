@@ -10,6 +10,7 @@ import {
 } from "./llm";
 import { enrichWithArticleText } from "./extract";
 import { findImage, findVideo } from "./media";
+import { refreshBroadcasts } from "./broadcasts";
 import {
   mergeArticles,
   getArticles,
@@ -83,10 +84,13 @@ export async function runRefresh(): Promise<RefreshResult> {
   const lookbackHours = Number(process.env.LOOKBACK_HOURS || 24);
   const targets = computeTargets(perRun);
 
-  // 1) שאיבת כל המקורות: פידי Google News (RSS) + שאיבה ישירה מאתרים ישראליים
+  // 1) שאיבת כל המקורות: פידי Google News (RSS) + שאיבה ישירה מאתרים ישראליים.
+  //    במקביל מרעננים את לוח השידורים (best-effort, עם שער רעננות פנימי - לא
+  //    קורא לרשת אם הנתונים טריים). לעולם לא חוסם/מפיל את צינור הכתבות.
   const [rssItems, scrapedItems] = await Promise.all([
     fetchAllSources(SOURCES),
     scrapeIsraeliSites(),
+    refreshBroadcasts().catch(() => null),
   ]);
   const raw = [...rssItems, ...scrapedItems];
 

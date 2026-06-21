@@ -1,12 +1,13 @@
 import { promises as fs } from "fs";
 import path from "path";
-import type { Article, Update, Comment } from "./types";
+import type { Article, Update, Comment, BroadcastStore } from "./types";
 import { SEED_ARTICLES, SEED_UPDATES } from "./seed";
 
 const KEY_ARTICLES = "sportz:articles";
 const KEY_LINKS = "sportz:links";
 const KEY_UPDATES = "sportz:updates";
 const KEY_COMMENTS = "sportz:comments";
+const KEY_BROADCASTS = "sportz:broadcasts";
 const MAX_ARTICLES = 200;
 const MAX_LINKS = 4000;
 const MAX_UPDATES = 80;
@@ -229,6 +230,17 @@ export async function addComment(comment: Comment): Promise<void> {
   list.unshift(comment);
   map[comment.articleId] = list.slice(0, 300);
   await backendSet(KEY_COMMENTS, "comments.json", map);
+}
+
+// ── לוח שידורים (נשאב מערוץ הספורט, מרוענן מעת לעת) ────────────────
+
+/** לוח השידורים השמור (יום + ערוצים + שעות), או null אם טרם נשאב. */
+export async function getBroadcasts(): Promise<BroadcastStore | null> {
+  return backendGet<BroadcastStore>(KEY_BROADCASTS, "broadcasts.json", false);
+}
+
+export async function saveBroadcasts(store: BroadcastStore): Promise<void> {
+  await backendSet(KEY_BROADCASTS, "broadcasts.json", store);
 }
 
 export const storageMode = useKv ? "upstash" : "file";
