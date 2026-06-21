@@ -110,11 +110,17 @@ export async function findImage(query: string): Promise<FoundImage | null> {
   }
 }
 
+// מפסק זרם ל-YouTube: שגיאת 403 (מפתח פסול / YouTube Data API לא מופעל / הגבלת
+// IP) היא קבועה, לא חולפת. אחרי 403 ראשון מפסיקים לקרוא עד הפעלה מחדש של
+// התהליך - כדי לא לבזבז קריאה (ולא להשהות) לכל כתבה בכל מחזור. אתחול הקונטיינר
+// (למשל אחרי תיקון המפתח) מאפס את המפסק ובודק שוב.
+let youtubeDisabled = false;
+
 /**
  * חיפוש סרטון YouTube רלוונטי. מחזיר videoId להטמעה, או null.
  */
 export async function findVideo(query: string): Promise<string | null> {
-  if (!YOUTUBE_KEY || !query.trim()) return null;
+  if (!YOUTUBE_KEY || youtubeDisabled || !query.trim()) return null;
   try {
     const url =
       "https://www.googleapis.com/youtube/v3/search?" +
@@ -132,7 +138,16 @@ export async function findVideo(query: string): Promise<string | null> {
 
     const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) {
-      console.warn(`[media] youtube -> HTTP ${res.status}`);
+      // 403 = מפתח/הרשאה פסולים (קבוע). מכבים את החיפוש לכל שאר התהליך.
+      if (res.status === 403) {
+        youtubeDisabled = true;
+        console.warn(
+          "[media] youtube -> HTTP 403; disabling video lookups for this process " +
+            "(check YOUTUBE_API_KEY: is YouTube Data API v3 enabled? key restricted?)",
+        );
+      } else {
+        console.warn(`[media] youtube -> HTTP ${res.status}`);
+      }
       return null;
     }
     const data = (await res.json()) as {
