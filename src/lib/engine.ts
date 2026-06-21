@@ -3,7 +3,11 @@ import { SOURCES } from "./sources";
 import { fetchAllSources } from "./rss";
 import { scrapeIsraeliSites } from "./scrape";
 import { selectCandidates, type ScoredItem } from "./relevance";
-import { generateArticles, type GenerationContext } from "./llm";
+import {
+  generateArticles,
+  proofreadArticle,
+  type GenerationContext,
+} from "./llm";
 import { enrichWithArticleText } from "./extract";
 import { findImage, findVideo } from "./media";
 import {
@@ -193,10 +197,21 @@ export async function runRefresh(): Promise<RefreshResult> {
   const articles = (
     await Promise.all(
       generated.articles.map(async (g) => {
-        const base = toArticle(g);
+        if (!g.headline || !g.headline.trim()) return null;
+
+        // הגהה לשונית (Sonnet): תיקון דקדוק והפשטת שפה לפני יצירת ה-slug/id,
+        // כדי שאלה ייגזרו מהכותרת המתוקנת. best-effort - נכשל? נשמר המקור.
+        const fixed = await proofreadArticle({
+          headline: g.headline,
+          subtitle: g.subtitle || "",
+          body: g.body || "",
+        });
+        const gFinal = fixed ? { ...g, ...fixed } : g;
+
+        const base = toArticle(gFinal);
         if (!base.headline) return null;
 
-        const query = (g.imageQuery || g.headline || "").trim();
+        const query = (gFinal.imageQuery || gFinal.headline || "").trim();
 
         const [image, videoId] = await Promise.all([
           findImage(query),

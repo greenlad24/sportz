@@ -210,13 +210,14 @@ async function callAnthropic(
   systemPrompt: string,
   userMessage: string,
   maxTokens: number,
+  model: string = ANTHROPIC_MODEL,
 ): Promise<string> {
   const { client, requestOptions } = buildAnthropic();
   // חובה להשתמש ב-streaming: עם max_tokens גדול ה-SDK חוסם בקשות non-streaming
   // שעלולות להימשך מעל 10 דקות ("Streaming is required ..."). streaming מסיר את המגבלה.
   const stream = client.messages.stream(
     {
-      model: ANTHROPIC_MODEL,
+      model,
       max_tokens: maxTokens,
       system: [
         {
@@ -340,20 +341,28 @@ export async function generateArticles(
   return { articles, updates };
 }
 
-// ── מעבר עריכה (AI שני) - ליטוש לרמת עיתונאות מקצועית ────────────────
+// ── מעבר הגהה (AI שני) - דקדוק עברי ושפה פשוטה ──────────────────────
+// כותב הכתבות נשאר Opus; ההגהה רצה במודל זול וחזק יותר לעברית (Sonnet) כדי
+// להעלות את רמת הדקדוק והפשטות בעלות נמוכה. מתקן בלבד - לא משנה עובדות.
 
-const EDITOR_ENABLED = (process.env.EDITOR_ENABLED ?? "1") !== "0";
+const PROOFREAD_ENABLED = (process.env.PROOFREAD_ENABLED ?? "1") !== "0";
+const PROOFREAD_MODEL =
+  process.env.PROOFREAD_MODEL || "claude-sonnet-4-6";
 
-const EDITOR_SYSTEM_PROMPT = `אתה עורך לשון ועורך-ראשי בכיר בעיתון ספורט ישראלי מוביל.
-קיבלת טיוטת כתבה (כותרת, כותרת-משנה, גוף) וצריך להחזיר גרסה מלוטשת ברמת עיתונאות מקצועית, כאילו נכתבה בידי כתב ספורט ישראלי ותיק.
+const PROOFREAD_SYSTEM_PROMPT = `אתה מגיה לשון מקצועי לעברית באתר ספורט ישראלי. קיבלת כתבה מוכנה (כותרת, כותרת-משנה, גוף), ותפקידך לתקן את העברית בלבד - בלי לשנות את התוכן.
 
-מה לעשות:
-- שפר את העברית: תקנית, זורמת וטבעית. תקן ניסוחים מסורבלים, תרגומית (תרגום מילולי מאנגלית), חזרתיות, קלישאות ומשפטים מגושמים.
-- כותרת ראשית וכותרת-משנה ברמת עיתון: חדות, מדויקות, מסקרנות, בלי קליק-בייט זול ובלי חזרה ביניהן.
-- שמור על המבנה: פסקאות מופרדות בשורה ריקה, וכותרות-משנה בשורה שמתחילה ב-"## " (בלי כוכביות **).
-- שמור על אורך דומה (כ-1000 מילים) ועל כל העובדות. אל תוסיף עובדות, נתונים או ציטוטים חדשים, ואל תמחק מידע מהותי.
+מה לתקן:
+- דקדוק תקני: התאמה במין ובמספר (שם עצם-תואר, נושא-פועל), מילות יחס נכונות (זכה *ב*, השפיע *על*, דיווח *על*, התמודד *עם*, פגע *ב* וכו'), סמיכות, צורות רבים, וזמני פעלים.
+- מילים שגויות או בהקשר לא נכון: החלף במילה הנכונה והפשוטה.
+- פשטות: הפוך עברית גבוהה/מליצית/ספרותית לעברית יומיומית, פשוטה וברורה שכל קורא מבין. פרק משפטים ארוכים ומסורבלים למשפטים קצרים וישירים. הסר תרגומית (תרגום מילולי מאנגלית) וקלישאות.
 
-החזר אך ורק JSON תקין (ללא code fences): { "headline": "...", "subtitle": "...", "body": "..." }`;
+כללים נוקשים (אסור לחרוג):
+- אל תשנה עובדות: שמות, מספרים, תוצאות, סכומים, תאריכים וציטוטים - השאר בדיוק כפי שהם. אל תוסיף ואל תמחק מידע.
+- שמור במדויק על המבנה: פסקאות מופרדות בשורה ריקה, כותרות-משנה בשורות שמתחילות ב-"## ", והדגשות **טקסט**.
+- שמור במדויק על קישורים פנימיים בפורמט [טקסט](/article/SLUG) - מותר לתקן את טקסט העוגן, אך אל תיגע ב-SLUG שבסוגריים ואל תמחק קישור.
+- שמור על אורך דומה. המטרה היא תיקון לשוני, לא כתיבה מחדש.
+
+החזר אך ורק JSON תקין (ללא טקסט נוסף, ללא code fences): { "headline": "...", "subtitle": "...", "body": "..." }`;
 
 export interface EditableArticle {
   headline: string;
@@ -361,19 +370,31 @@ export interface EditableArticle {
   body: string;
 }
 
+/** האם יש אישורים ל-Anthropic (ההגהה רצה תמיד מול Anthropic/Sonnet) */
+function hasAnthropicCreds(): boolean {
+  return Boolean(
+    process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN,
+  );
+}
+
 /**
- * מעביר כתבה דרך "עורך" שני לליטוש לשוני וכותרות ברמת עיתון.
- * best-effort: אם נכשל או כבוי - מחזיר null והכתבה המקורית נשמרת.
+ * מעביר כתבה דרך מגיה לשוני (מודל Sonnet) לתיקון דקדוק והפשטת שפה.
+ * best-effort: אם נכשל / כבוי / אין אישורי Anthropic - מחזיר null והמקור נשמר.
  */
-export async function editArticle(
+export async function proofreadArticle(
   article: EditableArticle,
 ): Promise<EditableArticle | null> {
-  if (!EDITOR_ENABLED) return null;
+  if (!PROOFREAD_ENABLED || !hasAnthropicCreds()) return null;
   const userMessage =
-    "ערוך וללטש את הטיוטה הבאה והחזר JSON בלבד:\n\n" +
+    "הגֵה ותקֵן את העברית בכתבה הבאה (תיקון לשוני בלבד, בלי לשנות תוכן) והחזר JSON בלבד:\n\n" +
     JSON.stringify(article, null, 2);
   try {
-    const text = await callLLM(EDITOR_SYSTEM_PROMPT, userMessage, 6000);
+    const text = await callAnthropic(
+      PROOFREAD_SYSTEM_PROMPT,
+      userMessage,
+      8000,
+      PROOFREAD_MODEL,
+    );
     const obj = extractJsonObject(text);
     if (
       !obj ||
@@ -393,7 +414,7 @@ export async function editArticle(
       body: String(obj.body).trim(),
     };
   } catch (err) {
-    console.warn(`[llm] editArticle failed: ${(err as Error).message}`);
+    console.warn(`[llm] proofreadArticle failed: ${(err as Error).message}`);
     return null;
   }
 }
