@@ -12,6 +12,7 @@ export interface RawItem {
   category: Category;
   publishedAt: string; // ISO
   image?: string; // תמונה שחולצה מהמקור (אם קיימת)
+  fullText?: string; // גוף הכתבה המלא מהמקור (נשאב לפני יצירה, לעומק ודיוק)
 }
 
 /** כתבה מוגמרת בעברית, כפי שמוצגת באתר ונשמרת באחסון */

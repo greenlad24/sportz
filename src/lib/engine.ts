@@ -4,6 +4,7 @@ import { fetchAllSources } from "./rss";
 import { scrapeIsraeliSites } from "./scrape";
 import { selectCandidates, type ScoredItem } from "./relevance";
 import { generateArticles, type GenerationContext } from "./llm";
+import { enrichWithArticleText } from "./extract";
 import { findImage, findVideo } from "./media";
 import {
   mergeArticles,
@@ -115,6 +116,20 @@ export async function runRefresh(): Promise<RefreshResult> {
     (n, a) => n + a.length,
     0,
   );
+
+  // 2.3) העשרה: שאיבת גוף הכתבה המלא מהמקורות הישירים (אתרים ישראליים + פידי
+  //      NBA ישירים). כך הכותב מקבל את העובדות המלאות - שמות, מספרים, ציטוטים -
+  //      ולא רק כותרת/קטע קצר, מה שמייצר כתבות מעמיקות ומדויקות במקום עמומות.
+  //      best-effort: קישורי Google News אינם נשאבים (הפניה) ונשארים עם הקטע.
+  if (candidateCount > 0) {
+    // מעשירים רק את המובילים בכל קטגוריה (לפי ניקוד) - אלה שיהפכו לכתבות + מעט
+    // עומק להצלבה. כך חוסכים שאיבות וטוקנים בלי לפגוע באיכות הכתבות שנכתבות.
+    const toEnrich = (Object.keys(candidates) as Category[]).flatMap((cat) =>
+      candidates[cat].slice(0, targets[cat] + 3),
+    );
+    const enriched = await enrichWithArticleText(toEnrich);
+    console.log(`[enrich] full text: ${enriched}/${toEnrich.length} candidates`);
+  }
 
   // 2.2) הקשר ל-LLM: נושאים שכבר כיסינו (דה-דופ ברמת נושא) + כתבות קיימות
   //      לקישור פנימי. סורקים את הכתבות מהשבוע האחרון.
