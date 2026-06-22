@@ -5,39 +5,52 @@ articles from live news using Claude. Next.js 14 (App Router) + TypeScript +
 Tailwind. Runs on a DigitalOcean droplet via Docker Compose (file storage),
 or on Vercel (Upstash Redis storage).
 
-## How the news engine works (the core loop)
+## How the news engine works (two-phase pipeline)
 
-`runRefresh()` in `src/lib/engine.ts` is the whole pipeline, run on a schedule:
+`src/lib/engine.ts` splits into two phases on independent timers. The writer is
+**free** (Gemini Flash via the OpenAI-compatible path) — server cost only.
 
-1. **Fetch** — `src/lib/sources.ts` lists Google News RSS searches + a few
-   direct feeds. `src/lib/rss.ts` and `src/lib/scrape.ts` pull the raw items.
-   Avdija queries use `when:1d` (last 24h).
-2. **Select (free filter)** — `src/lib/relevance.ts` `selectCandidates()`
-   scores by keyword relevance + freshness, drops near-duplicate titles, caps
-   per category. This is what keeps the Claude token bill low.
-3. **Dedupe vs processed** — links already sent to the LLM (last 96h) are
-   skipped (`store.getProcessedLinks`). This is the main cost saver.
-4. **Generate** — `src/lib/llm.ts` `generateArticles()` makes **one** Claude
-   call that returns all articles + "hourly updates" as JSON. The prompt also
-   receives `alreadyCovered` (recent headlines/subtopics — never rewrite a
-   covered topic) and `internalArticles` (for internal links).
-5. **Enrich media** — per article, `src/lib/media.ts`: `findImage()` (Brave
-   Image Search, US sites, past week, with credit) and `findVideo()`
-   (YouTube). Both best-effort; gated on env keys.
-6. **Store** — `store.mergeArticles()` dedupes by id/sourceUrl and persists.
+**Phase 1 — `planRefresh()` (every ~15 min, `/api/plan`):**
+1. **Fetch** — `src/lib/sources.ts` (Google News RSS + direct feeds) via
+   `rss.ts` + `scrape.ts` (Israeli sites). Refreshes broadcasts too.
+2. **Select + cluster (free)** — `relevance.ts selectCandidates()` scores by
+   keyword + freshness and **clusters** same-story sources into one group
+   (`related[]`).
+3. **Dedupe vs processed links** — already-considered links (96h) are skipped.
+4. **Full text** — `extract.ts enrichWithArticleText()` scrapes each group's
+   primary + related. **Resolves Google News redirect links** to the publisher
+   URL first (base64 decode → redirect-follow), so full text is actually
+   fetched (~half of items in practice).
+5. **Hard topic dedup** — `dedup.ts`: each group gets a `topicSignature`;
+   groups matching any article from the last `DEDUP_WINDOW_HOURS` (default 7d)
+   OR another accepted group are **dropped, never written**. This is a code
+   gate, not a prompt hint — the fix for repeated articles.
+6. **Enqueue** — survivors go to a persistent `queue.json` (`store.ts`).
 
-Target: ~10 articles/run, Avdija prioritized then filled from Israeli
-basketball + world football (`computeTargets`, soft mix). Volume is bounded by
-real news — quiet hours produce fewer; the model must not fabricate filler.
+**Phase 2 — `writeNext()` (every ~2 min, `/api/write`):**
+1. **Pop one group** (highest score) from the queue.
+2. **Re-check dedup** (something may have published since enqueue).
+3. **Write** — `llm.ts generateArticles()` writes **one** article from the
+   whole group (multi-source synthesis) + updates, as JSON. The
+   **dictionary** (`src/lib/dictionary.ts`) is baked into the prompt to enforce
+   correct Hebrew — there is **no second proofread pass** anymore.
+4. **Enrich media** (`media.ts`: Brave image + YouTube video, best-effort).
+5. **Store** — `store.mergeArticles()` dedupes by id/sourceUrl and persists.
+
+Result: a continuous trickle (one article every ~2 min), each synthesized from
+a group of related sources, with no cross-day duplicates. Volume is bounded by
+real news — the model must not fabricate filler.
 
 ## Scheduling
 
 - `docker-compose.yml` runs a `scheduler` service (`scripts/scheduler.mjs`)
-  that POSTs `/api/refresh?key=$CRON_SECRET` every `REFRESH_INTERVAL_MS`
-  (default 5 min). An in-memory lock prevents overlapping runs, so most
-  triggers return `{"started":false,"reason":"already running"}` — normal.
-- Manual trigger:
+  with **two timers**: POSTs `/api/plan` every `PLAN_INTERVAL_MS` (default
+  15 min) and `/api/write` every `WRITE_INTERVAL_MS` (default 2 min). Each
+  phase has its own in-memory lock; overlapping triggers return
+  `{"started":false,"reason":"already running"}` — normal.
+- Manual full run (plan + drain whole queue):
   `curl -s -X POST "http://localhost:3000/api/refresh?key=$CRON_SECRET"`
+- Write more than one in a call: `/api/write?key=...&n=5`.
 
 ## Operating on the droplet
 
@@ -52,22 +65,28 @@ real news — quiet hours produce fewer; the model must not fabricate filler.
 
 ## Env vars (see `.env.example`)
 
-- `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN` — the writer. `CLAUDE_MODEL`
-  (default `claude-opus-4-8`). Or `LLM_PROVIDER=openai` + `LLM_BASE_URL/KEY/MODEL`.
-- `CRON_SECRET` — guards `/api/refresh` and `/api/status`.
+- **Writer (free default):** `LLM_PROVIDER=openai` +
+  `LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai` +
+  `LLM_MODEL=gemini-2.5-flash` + `LLM_API_KEY` (free key from aistudio.google.com).
+  Swappable to Groq/MiniMax (same protocol) or `LLM_PROVIDER=anthropic` +
+  `ANTHROPIC_API_KEY`/`CLAUDE_MODEL` (paid).
+- `CRON_SECRET` — guards `/api/plan`, `/api/write`, `/api/refresh`, `/api/status`.
 - `BRAVE_API_KEY` — article images. `YOUTUBE_API_KEY` — article videos.
-- `ARTICLES_PER_RUN` (10), `LOOKBACK_HOURS` (24), `LLM_MAX_TOKENS` (30000),
-  `REFRESH_INTERVAL_MS` (300000).
+- `ARTICLES_PER_RUN` (10), `LOOKBACK_HOURS` (24), `ARTICLE_MAX_TOKENS` (8000).
+- `PLAN_INTERVAL_MS` (900000), `WRITE_INTERVAL_MS` (120000), `QUEUE_TTL_HOURS` (6).
+- `DEDUP_WINDOW_HOURS` (168), `DEDUP_SIMILARITY` (0.5) — topic-dedup tuning.
 - `UPSTASH_REDIS_REST_URL/TOKEN` — only for Vercel; droplet uses files.
 
 ## Known issues / gotchas
 
 - Some feeds 403 server-side (SLAM, HoopsHype, the Feedspot `fs-*` ones).
   Harmless — Google News + ESPN NBA + Reddit carry the volume.
-- The whole run is **one large Claude call**. If logs show
-  `[llm] failed to parse JSON output`, the output likely truncated — lower
-  `ARTICLES_PER_RUN` or raise `LLM_MAX_TOKENS`. (A per-article generation mode
-  is the planned fix if this recurs.)
+- Writing is now **one LLM call per article** (per group), not one big call.
+  If logs show `[llm] failed to parse JSON output`, that single article was
+  skipped — raise `ARTICLE_MAX_TOKENS` if outputs truncate (`finish_reason:
+  length`). Gemini Flash "thinks" by default, consuming part of the budget.
+- Google News links that don't decode fall back to the RSS summary (no full
+  text). `[plan] full text: N/M items` in logs shows the hit rate (~half).
 - Article bodies are Markdown-lite: `## ` subheads and `[text](/article/slug)`
   internal links, rendered by `src/components/ArticleBody.tsx`.
 

@@ -101,3 +101,18 @@ export interface LlmOutput {
   articles: GeneratedArticle[];
   updates: GeneratedUpdate[];
 }
+
+/**
+ * "אשכול ממתין" - סיפור אחד (פריט ראשי + מקורות-משנה על אותו אירוע) שנשאב,
+ * הועשר בטקסט מלא, עבר דה-דופ, וממתין בתור להיכתב. שלב התכנון (planRefresh)
+ * דוחף אותם לתור; שלב הכתיבה (writeNext) שולף אחד-אחד וכותב כתבה לכל אשכול.
+ */
+export interface QueuedGroup {
+  id: string; // זהות יציבה (hash של קישור הפריט הראשי) - למניעת כפילות בתור
+  category: Category;
+  primary: RawItem; // הפריט הראשי (עם fullText אם נשאב)
+  related: RawItem[]; // מקורות נוספים על אותו סיפור (עם fullText כשנשאב)
+  sig: string; // חתימת נושא (טוקנים מנורמלים) - לזיהוי כפילויות בין-ריצתי
+  score: number; // ניקוד רלוונטיות (לדירוג בתור)
+  enqueuedAt: string; // ISO - מתי נכנס לתור (ל-TTL וסדר שליפה)
+}

@@ -1,43 +1,66 @@
-// מצב הריצה האחרון של מנוע הניוז - משותף בין /api/refresh ל-/api/status.
-// נשמר בזיכרון התהליך (מספיק לדרופלט עם תהליך Node יחיד ומתמשך).
-import type { RefreshResult } from "./engine";
+// מצב הריצה של מנוע הניוז - משותף בין נקודות ה-cron ל-/api/status.
+// שני שלבים בלתי-תלויים: "plan" (כל 15 דק') ו-"write" (כל 2 דק'), כל אחד עם
+// נעילה משלו. נשמר בזיכרון התהליך (מספיק לדרופלט עם תהליך Node יחיד ומתמשך).
+import type { PlanResult, WriteResult } from "./engine";
 
-interface RunState {
+export type PhaseName = "plan" | "write";
+
+interface PhaseState<T> {
   isRunning: boolean;
   startedAt: number | null;
   lastFinishedAt: number | null;
-  lastResult: RefreshResult | null;
+  lastResult: T | null;
   lastError: string | null;
   lastErrorAt: number | null;
 }
 
-const state: RunState = {
-  isRunning: false,
-  startedAt: null,
-  lastFinishedAt: null,
-  lastResult: null,
-  lastError: null,
-  lastErrorAt: null,
+function emptyPhase<T>(): PhaseState<T> {
+  return {
+    isRunning: false,
+    startedAt: null,
+    lastFinishedAt: null,
+    lastResult: null,
+    lastError: null,
+    lastErrorAt: null,
+  };
+}
+
+const state: { plan: PhaseState<PlanResult>; write: PhaseState<WriteResult> } = {
+  plan: emptyPhase<PlanResult>(),
+  write: emptyPhase<WriteResult>(),
 };
 
-export function getRunState(): Readonly<RunState> {
+export function getRunState() {
   return state;
 }
 
-export function markRunStart(): void {
-  state.isRunning = true;
-  state.startedAt = Date.now();
+/** מנסה לתפוס את נעילת השלב. מחזיר false אם כבר רץ (יש לדלג). */
+export function beginPhase(phase: PhaseName): boolean {
+  if (state[phase].isRunning) return false;
+  state[phase].isRunning = true;
+  state[phase].startedAt = Date.now();
+  return true;
 }
 
-export function markRunDone(result: RefreshResult): void {
-  state.isRunning = false;
-  state.lastFinishedAt = Date.now();
-  state.lastResult = result;
+export function endPhase(
+  phase: PhaseName,
+  result: PlanResult | WriteResult,
+): void {
+  if (phase === "plan") {
+    state.plan.isRunning = false;
+    state.plan.lastFinishedAt = Date.now();
+    state.plan.lastResult = result as PlanResult;
+  } else {
+    state.write.isRunning = false;
+    state.write.lastFinishedAt = Date.now();
+    state.write.lastResult = result as WriteResult;
+  }
 }
 
-export function markRunError(err: unknown): void {
-  state.isRunning = false;
-  state.lastFinishedAt = Date.now();
-  state.lastError = err instanceof Error ? err.message : String(err);
-  state.lastErrorAt = Date.now();
+export function failPhase(phase: PhaseName, err: unknown): void {
+  const s = state[phase];
+  s.isRunning = false;
+  s.lastFinishedAt = Date.now();
+  s.lastError = err instanceof Error ? err.message : String(err);
+  s.lastErrorAt = Date.now();
 }

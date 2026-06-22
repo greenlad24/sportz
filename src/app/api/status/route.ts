@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getArticles, getUpdates, storageMode } from "@/lib/store";
+import { getArticles, getUpdates, getQueue, storageMode } from "@/lib/store";
 import { mediaConfig } from "@/lib/media";
 import { getRunState } from "@/lib/runState";
 
@@ -22,28 +22,29 @@ export async function GET(req: NextRequest) {
 
   const articles = await getArticles();
   const updates = await getUpdates(100);
+  const queue = await getQueue();
   const newestPublished = articles[0]?.publishedAt ?? null;
   const lastCreatedAt = articles.reduce<string | null>((max, a) => {
     return !max || a.createdAt > max ? a.createdAt : max;
   }, null);
 
   const run = getRunState();
+  const phase = (p: typeof run.plan | typeof run.write) => ({
+    isRunning: p.isRunning,
+    startedAt: p.startedAt ? new Date(p.startedAt).toISOString() : null,
+    lastFinishedAt: p.lastFinishedAt
+      ? new Date(p.lastFinishedAt).toISOString()
+      : null,
+    lastResult: p.lastResult,
+    lastError: p.lastError,
+    lastErrorAt: p.lastErrorAt ? new Date(p.lastErrorAt).toISOString() : null,
+  });
 
   return NextResponse.json({
     ok: true,
     now: new Date().toISOString(),
-    run: {
-      isRunning: run.isRunning,
-      startedAt: run.startedAt ? new Date(run.startedAt).toISOString() : null,
-      lastFinishedAt: run.lastFinishedAt
-        ? new Date(run.lastFinishedAt).toISOString()
-        : null,
-      lastResult: run.lastResult,
-      lastError: run.lastError,
-      lastErrorAt: run.lastErrorAt
-        ? new Date(run.lastErrorAt).toISOString()
-        : null,
-    },
+    run: { plan: phase(run.plan), write: phase(run.write) },
+    queue: { size: queue.length },
     store: {
       mode: storageMode,
       articleCount: articles.length,

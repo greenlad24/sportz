@@ -1,51 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runRefresh } from "@/lib/engine";
-import {
-  getRunState,
-  markRunStart,
-  markRunDone,
-  markRunError,
-} from "@/lib/runState";
+import { planRefresh, writeNext } from "@/lib/engine";
+import { beginPhase, endPhase, failPhase, getRunState } from "@/lib/runState";
 
-// תמיד דינמי, ללא מטמון - זו נקודת ה-cron
+// ריצה ידנית מלאה (גיבוי/בדיקה): תכנון ואז ניקוז כל התור בקריאה אחת.
+// בפרודקשן המתזמן משתמש ב-/api/plan (כל 15 דק') ו-/api/write (כל 2 דק').
 export const dynamic = "force-dynamic";
-export const maxDuration = 60; // רלוונטי ל-Vercel בלבד; בדרופלט מתעלמים ממנו
+export const maxDuration = 120;
 
 function authorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
-  // אם לא הוגדר סוד - לאפשר (נוח לפיתוח). בפרודקשן הגדר CRON_SECRET.
   if (!secret) return true;
-
-  const auth = req.headers.get("authorization");
-  if (auth === `Bearer ${secret}`) return true;
-
-  // Vercel Cron שולח את הסוד גם כ-header ייעודי; כגיבוי תומכים ב-?key=
-  const key = req.nextUrl.searchParams.get("key");
-  return key === secret;
+  if (req.headers.get("authorization") === `Bearer ${secret}`) return true;
+  return req.nextUrl.searchParams.get("key") === secret;
 }
 
 async function handle(req: NextRequest) {
   if (!authorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-
-  if (getRunState().isRunning) {
+  const run = getRunState();
+  if (run.plan.isRunning || run.write.isRunning) {
     return NextResponse.json({ ok: true, started: false, reason: "already running" });
   }
 
-  markRunStart();
-  // הרצה ברקע: מחזירים תשובה מיד (פחות משנייה) והכתבות נכתבות אחר כך.
-  // מתאים לדרופלט (תהליך Node מתמשך שלא "קופא" אחרי התשובה). העמודים דינמיים,
-  // ולכן אין צורך ב-revalidate - כתבות חדשות מופיעות מיד כשהן נשמרות.
-  runRefresh()
-    .then((result) => {
-      console.log("[refresh] done:", JSON.stringify(result));
-      markRunDone(result);
-    })
-    .catch((err) => {
-      console.error("[refresh] failed:", err);
-      markRunError(err);
-    });
+  // רץ ברקע: תכנון -> כתיבת כל מה שנכנס לתור.
+  (async () => {
+    beginPhase("plan");
+    let plan;
+    try {
+      plan = await planRefresh();
+      console.log("[refresh:plan] done:", JSON.stringify(plan));
+      endPhase("plan", plan);
+    } catch (err) {
+      console.error("[refresh:plan] failed:", err);
+      failPhase("plan", err);
+      return;
+    }
+    beginPhase("write");
+    try {
+      const write = await writeNext(plan.enqueued + 5);
+      console.log("[refresh:write] done:", JSON.stringify(write));
+      endPhase("write", write);
+    } catch (err) {
+      console.error("[refresh:write] failed:", err);
+      failPhase("write", err);
+    }
+  })();
 
   return NextResponse.json({ ok: true, started: true });
 }
@@ -53,7 +53,6 @@ async function handle(req: NextRequest) {
 export async function GET(req: NextRequest) {
   return handle(req);
 }
-
 export async function POST(req: NextRequest) {
   return handle(req);
 }

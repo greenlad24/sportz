@@ -1,6 +1,12 @@
 import { promises as fs } from "fs";
 import path from "path";
-import type { Article, Update, Comment, BroadcastStore } from "./types";
+import type {
+  Article,
+  Update,
+  Comment,
+  BroadcastStore,
+  QueuedGroup,
+} from "./types";
 import { SEED_ARTICLES, SEED_UPDATES } from "./seed";
 
 const KEY_ARTICLES = "sportz:articles";
@@ -8,11 +14,14 @@ const KEY_LINKS = "sportz:links";
 const KEY_UPDATES = "sportz:updates";
 const KEY_COMMENTS = "sportz:comments";
 const KEY_BROADCASTS = "sportz:broadcasts";
+const KEY_QUEUE = "sportz:queue";
 const MAX_ARTICLES = 200;
 const MAX_LINKS = 4000;
 const MAX_UPDATES = 80;
+const MAX_QUEUE = 200;
 const LINK_TTL_HOURS = 96; // כמה זמן לזכור שמקור כבר עובד (מונע עיבוד חוזר)
 const UPDATE_TTL_HOURS = 8; // "עדכוני השעה" - שומרים עדכונים אחרונים בלבד
+const QUEUE_TTL_HOURS = Number(process.env.QUEUE_TTL_HOURS || 6); // אשכול ישן בתור = חדשות מעופשות, נזרק
 
 const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
 const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -241,6 +250,82 @@ export async function getBroadcasts(): Promise<BroadcastStore | null> {
 
 export async function saveBroadcasts(store: BroadcastStore): Promise<void> {
   await backendSet(KEY_BROADCASTS, "broadcasts.json", store);
+}
+
+// ── תור אשכולות ממתינים (planRefresh דוחף, writeNext שולף) ─────────
+// שלב התכנון בונה אשכולות (סיפור + מקורות-משנה, עם טקסט מלא) ודוחף לתור;
+// שלב הכתיבה שולף אחד כל ~2 דקות וכותב כתבה. כך יש זרם כתבות רציף.
+
+// מנעול תוך-תהליכי: plan ו-write עשויים לגעת בתור במקביל. שרשור הבטחות
+// מבטיח read-modify-write אטומי על queue.json (תהליך Node יחיד בדרופלט).
+let queueLock: Promise<void> = Promise.resolve();
+async function withQueueLock<T>(fn: () => Promise<T>): Promise<T> {
+  const prev = queueLock;
+  let release!: () => void;
+  queueLock = new Promise<void>((r) => (release = r));
+  await prev;
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+}
+
+function freshGroups(list: QueuedGroup[]): QueuedGroup[] {
+  const cutoff = Date.now() - QUEUE_TTL_HOURS * 36e5;
+  return list.filter((g) => new Date(g.enqueuedAt).getTime() >= cutoff);
+}
+
+/** מצב התור (קריאה טרייה) - אשכולות לא-מעופשים בלבד. */
+export async function getQueue(): Promise<QueuedGroup[]> {
+  const list = (await backendGet<QueuedGroup[]>(KEY_QUEUE, "queue.json", true)) ?? [];
+  return freshGroups(list);
+}
+
+/**
+ * מוסיף אשכולות לתור. מדלג על כפילויות לפי id ולפי חתימת-נושא (sig) זהה
+ * שכבר קיימת בתור (אותה קטגוריה). מנקה מעופשים וחותך לתקרה. מחזיר כמה נוספו.
+ */
+export async function enqueueGroups(groups: QueuedGroup[]): Promise<number> {
+  if (groups.length === 0) return 0;
+  return withQueueLock(async () => {
+    const existing = freshGroups(
+      (await backendGet<QueuedGroup[]>(KEY_QUEUE, "queue.json", true)) ?? [],
+    );
+    const ids = new Set(existing.map((g) => g.id));
+    const sigs = new Set(existing.map((g) => `${g.category}|${g.sig}`));
+    let added = 0;
+    for (const g of groups) {
+      if (ids.has(g.id)) continue;
+      if (sigs.has(`${g.category}|${g.sig}`)) continue;
+      existing.push(g);
+      ids.add(g.id);
+      sigs.add(`${g.category}|${g.sig}`);
+      added++;
+    }
+    const trimmed = existing
+      .sort((a, b) => b.score - a.score)
+      .slice(0, MAX_QUEUE);
+    await backendSet(KEY_QUEUE, "queue.json", trimmed);
+    return added;
+  });
+}
+
+/** שולף אשכול אחד לכתיבה (העדיפות הגבוהה ביותר) ומסיר אותו מהתור. */
+export async function popGroup(): Promise<QueuedGroup | null> {
+  return withQueueLock(async () => {
+    const list = freshGroups(
+      (await backendGet<QueuedGroup[]>(KEY_QUEUE, "queue.json", true)) ?? [],
+    );
+    if (list.length === 0) {
+      await backendSet(KEY_QUEUE, "queue.json", []);
+      return null;
+    }
+    list.sort((a, b) => b.score - a.score);
+    const next = list.shift()!;
+    await backendSet(KEY_QUEUE, "queue.json", list);
+    return next;
+  });
 }
 
 export const storageMode = useKv ? "upstash" : "file";

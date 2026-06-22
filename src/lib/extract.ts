@@ -18,18 +18,68 @@ function safeHost(url: string): string {
   }
 }
 
-/** קישורי Google News הם הפניות שלא נפתרות בצד-שרת - אין טעם לשאוב אותם */
+function isHttp(url: string): boolean {
+  try {
+    return /^https?:$/.test(new URL(url).protocol);
+  } catch {
+    return false;
+  }
+}
+
+function isGoogleNews(url: string): boolean {
+  return safeHost(url).endsWith("news.google.com");
+}
+
+/** האם אפשר לשאוב את ה-URL ישירות (אחרי פתרון הפניות Google News) */
 function isFetchable(url: string): boolean {
-  const host = safeHost(url);
-  if (!host) return false;
-  if (host.endsWith("news.google.com")) return false;
-  return /^https?:$/.test((() => {
-    try {
-      return new URL(url).protocol;
-    } catch {
-      return "";
-    }
-  })());
+  return isHttp(url) && !isGoogleNews(url);
+}
+
+/**
+ * פתרון קישור Google News (הפניה) ל-URL המקור האמיתי.
+ * שיטה 1 (מהירה, ללא רשת): מזהה ה-article הוא base64 של protobuf שמכיל את
+ * ה-URL כטקסט; מפענחים וסורקים את ה-URL הראשון שאינו של גוגל. עובד לרוב
+ * הקישורים מפורמט "CBMi...". שיטה 2 (גיבוי): מבקשים את הדף ועוקבים אחרי
+ * ההפניה. best-effort - אם נכשל מחזיר null והפריט נשאר עם הקטע הקצר.
+ */
+function decodeGoogleNewsUrl(googleUrl: string): string | null {
+  try {
+    const u = new URL(googleUrl);
+    const m =
+      u.pathname.match(/\/(?:rss\/)?articles\/([^/?]+)/) ||
+      u.pathname.match(/\/read\/([^/?]+)/);
+    if (!m) return null;
+    let seg = m[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (seg.length % 4) seg += "=";
+    const txt = Buffer.from(seg, "base64").toString("latin1");
+    const hit = txt.match(/https?:\/\/[^\s\x00-\x1f"'<>\\]+/);
+    if (!hit) return null;
+    // קטיעת "זנב" של protobuf אחרי ה-URL (בייטים לא-ASCII)
+    const found = hit[0].replace(/[\x80-\xff].*$/, "");
+    if (found.length > 12 && !found.includes("news.google.com")) return found;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveArticleUrl(url: string): Promise<string | null> {
+  if (!isGoogleNews(url)) return isHttp(url) ? url : null;
+  const decoded = decodeGoogleNewsUrl(url);
+  if (decoded) return decoded;
+  // גיבוי: בקשה רגילה - לעיתים גוגל מפנה (302/JS) לאתר המקור
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": UA, "Accept-Language": "he-IL,he;q=0.9,en;q=0.8" },
+      redirect: "follow",
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000),
+    });
+    if (res.url && !isGoogleNews(res.url) && isHttp(res.url)) return res.url;
+  } catch {
+    // התעלם - נשאר עם הקטע הקצר
+  }
+  return null;
 }
 
 /** חיפוש articleBody בתוך JSON-LD (המקור האמין; קיים ברוב אתרי החדשות) */
@@ -83,11 +133,15 @@ function textFromParagraphs(html: string): string | null {
   return joined.length > 200 ? joined : null;
 }
 
-/** שאיבת גוף הכתבה המלא מ-URL ישיר. מחזיר טקסט נקי (עד MAX_CHARS) או null. */
+/**
+ * שאיבת גוף הכתבה המלא מ-URL. קישורי Google News נפתרים תחילה ל-URL המקור.
+ * מחזיר טקסט נקי (עד MAX_CHARS) או null.
+ */
 export async function fetchArticleText(url: string): Promise<string | null> {
-  if (!isFetchable(url)) return null;
+  const real = await resolveArticleUrl(url);
+  if (!real || !isFetchable(real)) return null;
   try {
-    const res = await fetch(url, {
+    const res = await fetch(real, {
       headers: {
         "User-Agent": UA,
         "Accept-Language": "he-IL,he;q=0.9,en;q=0.8",

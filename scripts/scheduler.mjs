@@ -1,27 +1,31 @@
-// מתזמן פנימי: קורא ל-/api/refresh כל 5 דקות (מחליף את Vercel Cron בדרופלט).
-// הקריאה דרך ה-HTTP של ה-web גורמת ל-Next להריץ את המנוע *וגם* לרענן את
-// מטמון ה-ISR (revalidatePath) באותו תהליך - כך העמודים מתעדכנים מיידית.
+// מתזמן פנימי (מחליף Vercel Cron בדרופלט). שני מחזורים בלתי-תלויים:
+//   - /api/plan  כל ~15 דק' : שאיבה -> אשכול -> טקסט מלא -> דה-דופ -> תור.
+//   - /api/write כל ~2 דק'  : שולף אשכול אחד מהתור וכותב כתבה.
+// כך יש זרם כתבות רציף (כתבה כל 2 דק'), כל אחת מקבוצת מקורות מאוחדת.
+// הקריאה דרך ה-HTTP של ה-web מריצה את המנוע בתוך תהליך Next (עמודים דינמיים,
+// כך שכתבות חדשות מופיעות מיד).
 
 const BASE = process.env.INTERNAL_URL || "http://web:3000";
 const SECRET = process.env.CRON_SECRET || "";
-const INTERVAL = Number(process.env.REFRESH_INTERVAL_MS || 5 * 60 * 1000);
+const PLAN_INTERVAL = Number(process.env.PLAN_INTERVAL_MS || 15 * 60 * 1000);
+const WRITE_INTERVAL = Number(process.env.WRITE_INTERVAL_MS || 2 * 60 * 1000);
 
-function endpoint() {
+function endpoint(path) {
   const q = SECRET ? `?key=${encodeURIComponent(SECRET)}` : "";
-  return `${BASE}/api/refresh${q}`;
+  return `${BASE}${path}${q}`;
 }
 
-async function trigger() {
+async function trigger(path) {
   try {
-    const res = await fetch(endpoint(), { method: "POST" });
+    const res = await fetch(endpoint(path), { method: "POST" });
     const body = await res.json().catch(() => ({}));
     console.log(
       new Date().toISOString(),
-      `refresh -> ${res.status}`,
+      `${path} -> ${res.status}`,
       JSON.stringify(body),
     );
   } catch (err) {
-    console.error(new Date().toISOString(), "refresh failed:", err.message);
+    console.error(new Date().toISOString(), `${path} failed:`, err.message);
   }
 }
 
@@ -39,9 +43,16 @@ async function waitForWeb() {
 
 (async () => {
   console.log(
-    `[scheduler] base=${BASE} interval=${INTERVAL}ms secret=${SECRET ? "set" : "none"}`,
+    `[scheduler] base=${BASE} plan=${PLAN_INTERVAL}ms write=${WRITE_INTERVAL}ms secret=${SECRET ? "set" : "none"}`,
   );
   await waitForWeb();
-  await trigger();
-  setInterval(trigger, INTERVAL);
+
+  // תכנון ראשוני כדי למלא את התור, ואז התחלת מחזור הכתיבה אחרי דקה (לתת
+  // לתכנון ולהעשרת הטקסט המלא זמן לסיים לפני הכתיבה הראשונה).
+  await trigger("/api/plan");
+  setInterval(() => trigger("/api/plan"), PLAN_INTERVAL);
+  setTimeout(() => {
+    trigger("/api/write");
+    setInterval(() => trigger("/api/write"), WRITE_INTERVAL);
+  }, 60 * 1000);
 })();
