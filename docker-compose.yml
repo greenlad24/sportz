@@ -13,7 +13,9 @@ services:
       # אחסון מתמשך לכתבות (file store)
       - sportz-data:/app/.data
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/robots.txt"]
+      # 127.0.0.1 ולא localhost: ה-app מאזין על IPv4 (0.0.0.0), ו-localhost
+      # נפתר ל-IPv6 (::1) בתוך הקונטיינר -> healthcheck נכשל אף שהאתר תקין.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/robots.txt"]
       interval: 30s
       timeout: 5s
       retries: 5
