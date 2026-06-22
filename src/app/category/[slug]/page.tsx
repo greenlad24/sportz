@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getArticles } from "@/lib/store";
 import { categoryBySlug } from "@/lib/categories";
 import { ArticleCard } from "@/components/ArticleCard";
+import { rankArticles, visibleArticles } from "@/lib/ranking";
 import { SITE } from "@/lib/site";
 
 // דינמי: מרונדר מהאחסון החי בכל בקשה, כך שכתבות חדשות מופיעות מיד.
@@ -38,7 +39,10 @@ export default async function CategoryPage({
   if (!c) notFound();
 
   const all = await getArticles();
-  const items = all.filter((a) => a.category === c.category);
+  // טריות (24ש') + ידידותי-למשפחה + דירוג לפי שעה ואז חשיבות - לא לפי סדר כניסה.
+  const items = rankArticles(
+    visibleArticles(all).filter((a) => a.category === c.category),
+  );
 
   return (
     <div className="mx-auto max-w-site px-4 py-6">
@@ -55,7 +59,7 @@ export default async function CategoryPage({
 
       {items.length === 0 ? (
         <p className="rounded-lg border border-dashed border-line bg-white p-8 text-center text-ink-muted">
-          אין כרגע כתבות בקטגוריה זו. המנוע מתעדכן כל 5 דקות - חזרו בקרוב.
+          אין כרגע כתבות טריות בקטגוריה זו. המנוע מתעדכן כל הזמן - חזרו בקרוב.
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">

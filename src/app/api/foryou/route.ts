@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getArticles } from "@/lib/store";
+import { visibleArticles } from "@/lib/ranking";
 import type { Category } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +11,8 @@ export async function GET(req: NextRequest) {
   const tags = (sp.get("tags") || "").split(",").filter(Boolean);
   const exclude = new Set((sp.get("exclude") || "").split(",").filter(Boolean));
 
-  const all = await getArticles();
+  // רק חדשות טריות (24ש') וידידותיות-למשפחה בהמלצות.
+  const all = visibleArticles(await getArticles());
   // משקל קטגוריה לפי מיקום ברשימה (מוקדם = עניין גבוה יותר)
   const catWeight = new Map(cats.map((c, i) => [c, cats.length - i]));
   const tagSet = new Set(tags.map((t) => t.toLowerCase()));
@@ -20,6 +22,8 @@ export async function GET(req: NextRequest) {
     .map((a) => {
       let s = (catWeight.get(a.category) || 0) * 2;
       for (const t of a.tags) if (tagSet.has(t.toLowerCase())) s += 3;
+      // חשיבות הכתבה (importance) משפיעה גם בהמלצות
+      s += a.importance * 0.4;
       const ageH = (Date.now() - new Date(a.publishedAt).getTime()) / 36e5;
       s += Math.max(0, 2 - ageH / 48);
       return { a, s };

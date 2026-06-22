@@ -27,6 +27,7 @@ import {
 } from "./store";
 import { hashId, slugify } from "./utils";
 import { topicSignature, isDuplicateTopic, type CoveredTopic } from "./dedup";
+import { isFamilySafe } from "./safety";
 import { CATEGORIES } from "./categories";
 
 // חלון הדה-דופ: לא כותבים נושא שכבר כוסה ב-N השעות האחרונות (ברירת מחדל: שבוע).
@@ -79,7 +80,9 @@ function validIso(value: string): string {
   return Number.isNaN(t) ? new Date().toISOString() : new Date(t).toISOString();
 }
 
-function toArticle(g: GeneratedArticle): Article {
+// publishedAt נלקח מזמן הפרסום *האמיתי* של המקור (שכבר סונן ל-24 שעות), ולא
+// מהשדה שה-LLM מחזיר - שעלול להיות מומצא/ישן ולגרום לכתבות "מלפני חודשים".
+function toArticle(g: GeneratedArticle, sourcePublishedAt?: string): Article {
   const id = hashId(g.headline + g.sourceUrl);
   return {
     id,
@@ -97,7 +100,7 @@ function toArticle(g: GeneratedArticle): Article {
         : 5,
     sourceName: g.sourceName || "מקור חיצוני",
     sourceUrl: g.sourceUrl || "",
-    publishedAt: validIso(g.publishedAt),
+    publishedAt: validIso(sourcePublishedAt || g.publishedAt),
     createdAt: new Date().toISOString(),
   };
 }
@@ -119,10 +122,12 @@ function stripScored(it: ScoredItem | RawItem): RawItem {
   };
 }
 
-/** כותרת לחישוב חתימת-נושא: מעדיפים מקור עברי (הכתבה הסופית בעברית) */
-function groupSigTitle(primary: RawItem, related: RawItem[]): string {
-  const he = [primary, ...related].find((x) => x.lang === "he");
-  return (he ?? primary).title;
+// טקסט עשיר לחתימת-נושא: כותרות + תקצירים של כל מקורות האשכול. כך תופסים
+// "אותו סיפור" גם כשכותרות שונות (ריבוי מקורות/זוויות על אותו אירוע).
+function groupSigText(primary: RawItem, related: RawItem[]): string {
+  return [primary, ...related]
+    .map((x) => `${x.title} ${x.summary || ""}`)
+    .join(" ");
 }
 
 function toQueuedGroup(it: ScoredItem): QueuedGroup {
@@ -133,7 +138,7 @@ function toQueuedGroup(it: ScoredItem): QueuedGroup {
     category: it.category,
     primary,
     related,
-    sig: topicSignature(groupSigTitle(primary, related)),
+    sig: topicSignature(groupSigText(primary, related)),
     score: it.score,
     enqueuedAt: new Date().toISOString(),
   };
@@ -152,7 +157,9 @@ async function recentCoveredTopics(): Promise<CoveredTopic[]> {
       return t >= cutoff;
     })
     .map((a) => ({
-      sig: topicSignature(`${a.headline} ${a.tags.join(" ")}`),
+      sig: topicSignature(
+        `${a.headline} ${a.subtitle} ${a.summary} ${a.tags.join(" ")}`,
+      ),
       category: a.category,
       at: new Date(a.createdAt).getTime(),
     }));
@@ -197,7 +204,7 @@ async function enrichArticleMedia(
   g: GeneratedArticle,
   primary: RawItem,
 ): Promise<Article> {
-  const base = toArticle(g);
+  const base = toArticle(g, primary.publishedAt);
   const query = (g.imageQuery || g.headline || "").trim();
   const [image, videoId] = await Promise.all([
     findImage(query),
@@ -244,6 +251,8 @@ export async function planRefresh(): Promise<PlanResult> {
   const groups: ScoredItem[] = (Object.keys(selected) as Category[])
     .flatMap((cat) => selected[cat])
     .filter((it) => !processed.has(it.link))
+    // אתר ידידותי-למשפחה (13+): חוסמים מקורות עם תוכן מיני/גס לפני כתיבה.
+    .filter((it) => isFamilySafe(`${it.title} ${it.summary}`))
     .sort((a, b) => b.score - a.score);
   const candidateCount = groups.length;
 
@@ -354,6 +363,11 @@ export async function writeNext(max = 1): Promise<WriteResult> {
 
     const g = gen.articles[0];
     if (!g || !g.headline || !g.headline.trim()) continue;
+    // גייט בטיחות סופי: לא מפרסמים כתבה עם תוכן מיני/גס (13+).
+    if (!isFamilySafe(`${g.headline} ${g.subtitle || ""} ${g.summary || ""} ${g.body || ""}`)) {
+      console.warn(`[write] dropped unsafe article: ${g.headline}`);
+      continue;
+    }
     const article = await enrichArticleMedia(g, group.primary);
     if (!article.headline) continue;
     const added = await mergeArticles([article]);

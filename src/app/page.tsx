@@ -6,20 +6,11 @@ import { ArticleRow } from "@/components/ArticleRow";
 import { HourlyUpdates } from "@/components/HourlyUpdates";
 import { ForYou } from "@/components/ForYou";
 import { AdSlot } from "@/components/AdSlot";
-import type { Article } from "@/lib/types";
+import { rankArticles, visibleArticles } from "@/lib/ranking";
 
 // דינמי: מרונדר מהאחסון החי בכל בקשה, כך שכתבות חדשות מהמנוע מופיעות מיד.
 // (ISR/revalidate לא הציג תוכן חי באמינות בפריסת standalone, ולכן עברנו לדינמי.)
 export const dynamic = "force-dynamic";
-
-function rank(articles: Article[]): Article[] {
-  return [...articles].sort((a, b) => {
-    const aw = a.importance + (a.category === "avdija" ? 3 : 0);
-    const bw = b.importance + (b.category === "avdija" ? 3 : 0);
-    if (bw !== aw) return bw - aw;
-    return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
-  });
-}
 
 function SectionHeading({
   children,
@@ -49,23 +40,22 @@ function SectionHeading({
 }
 
 export default async function HomePage() {
-  const [articles, updates] = await Promise.all([getArticles(), getUpdates(14)]);
-  const ranked = rank(articles);
+  const [allArticles, updates] = await Promise.all([
+    getArticles(),
+    getUpdates(14),
+  ]);
+  // טריות (24ש') + ידידותי-למשפחה. דירוג: לפי שעה ואז חשיבות ("סיפור השעה").
+  const articles = visibleArticles(allArticles);
+  const ranked = rankArticles(articles);
 
-  // "סיפור השעה" - הכתבה המעניינת ביותר מבין אלו שנוצרו בשעה האחרונה (אחרת - הבולטת מכולן)
-  const hourAgo = Date.now() - 60 * 60 * 1000;
-  const recent = articles.filter(
-    (a) => new Date(a.createdAt).getTime() >= hourAgo,
-  );
-  const mainStory = rank(recent.length > 0 ? recent : articles)[0];
+  // "סיפור השעה" - הכתבה החשובה ביותר בשעה האחרונה (ראש הדירוג המאוחד).
+  const mainStory = ranked[0];
 
   const usedIds = new Set([mainStory?.id]);
-  const latest = articles.filter((a) => !usedIds.has(a.id)).slice(0, 10);
+  const latest = ranked.filter((a) => !usedIds.has(a.id)).slice(0, 10);
 
   // ברירת מחדל ל"המלצות לקריאה" עד שנצבר פרופיל עניין ב-localStorage
-  const foryouFallback = ranked
-    .filter((a) => a.id !== mainStory?.id)
-    .slice(0, 8);
+  const foryouFallback = latest.slice(0, 8);
 
   return (
     <div className="mx-auto max-w-site px-4 py-5">
@@ -100,7 +90,9 @@ export default async function HomePage() {
       {/* בלוקים לפי קטגוריה */}
       {CATEGORY_ORDER.map((cat) => {
         const c = CATEGORIES[cat];
-        const items = articles.filter((a) => a.category === cat).slice(0, 9);
+        const items = rankArticles(
+          articles.filter((a) => a.category === cat),
+        ).slice(0, 9);
         if (items.length === 0) return null;
         const blockLead = items[0];
         const blockRest = items.slice(1);
