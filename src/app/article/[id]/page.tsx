@@ -181,43 +181,35 @@ export default async function ArticlePage({
             </div>
           </header>
 
-          {/* מדיה: סרטון YouTube אם נמצא, אחרת תמונה + קרדיט */}
-          {article.videoId ? (
-            <div className="mb-6 aspect-video w-full overflow-hidden rounded-xl bg-black">
-              <iframe
-                src={`https://www.youtube.com/embed/${article.videoId}`}
-                title={article.headline}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                className="h-full w-full border-0"
-              />
-            </div>
-          ) : (
-            <figure className="mb-6">
-              <ArticleImage
-                category={article.category}
-                src={article.imageUrl}
-                alt={article.headline}
-                className="aspect-[16/9] w-full rounded-xl"
-              />
-              {article.imageCredit && (
-                <figcaption className="mt-1.5 text-xs text-ink-muted">
-                  קרדיט תמונה:{" "}
-                  <a
-                    href={article.imageCredit.link}
-                    target="_blank"
-                    rel="noopener noreferrer nofollow"
-                    className="hover:text-brand hover:underline"
-                  >
-                    {article.imageCredit.source}
-                  </a>
-                </figcaption>
-              )}
-            </figure>
-          )}
+          {/* תמונת כותרת - תמיד מוצגת (לכל כתבה יש תמונה/רקע) */}
+          <figure className="mb-6">
+            <ArticleImage
+              category={article.category}
+              src={article.imageUrl}
+              alt={article.headline}
+              className="aspect-[16/9] w-full rounded-xl"
+            />
+            {article.imageCredit && (
+              <figcaption className="mt-1.5 text-xs text-ink-muted">
+                קרדיט תמונה:{" "}
+                <a
+                  href={article.imageCredit.link}
+                  target="_blank"
+                  rel="noopener noreferrer nofollow"
+                  className="hover:text-brand hover:underline"
+                >
+                  {article.imageCredit.source}
+                </a>
+              </figcaption>
+            )}
+          </figure>
 
-          {/* גוף הכתבה */}
-          <ArticleBody body={article.body} />
+          {/* גוף הכתבה - הסרטון (אם נמצא) מוטמע בתוכו, אחרי פסקת הפתיחה */}
+          <ArticleBody
+            body={article.body}
+            videoId={article.videoId}
+            videoTitle={article.headline}
+          />
 
           {article.tags.length > 0 && (
             <div className="mt-6 flex flex-wrap gap-2">
