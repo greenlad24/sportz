@@ -172,44 +172,96 @@ export async function findImage(query: string): Promise<FoundImage | null> {
 // (למשל אחרי תיקון המפתח) מאפס את המפסק ובודק שוב.
 let youtubeDisabled = false;
 
+// ערוץ ה-YouTube של ESPN (גיבוי כשאין סרטון עברי). ניתן לעקוף ב-ENV אם המזהה
+// משתנה. ברירת המחדל היא ערוץ ESPN הראשי.
+const ESPN_CHANNEL_ID =
+  process.env.ESPN_YOUTUBE_CHANNEL_ID || "UCiWLfSweyRNmLpgEHekhoAg";
+
+// חלון "טריות" לסרטון: כדי שהסרטון יהיה על *החדשה הזו* ולא על השחקן בכלל,
+// מעדיפים העלאות מהשבועות האחרונים. ניתן לעקוף ב-ENV.
+const VIDEO_RECENCY_DAYS = Number(process.env.VIDEO_RECENCY_DAYS || 21);
+
+export interface VideoQuery {
+  /** שאילתה בעברית (כותרת הכתבה) - לסרטון עברי, מועדף */
+  he?: string;
+  /** שאילתה באנגלית (שם שחקן/קבוצה) - לגיבוי מערוץ ESPN */
+  en?: string;
+}
+
+/** חיפוש YouTube יחיד; מחזיר videoId של התוצאה הרלוונטית הראשונה, או null. */
+async function youtubeSearch(
+  query: string,
+  opts: { relevanceLanguage: string; regionCode: string; channelId?: string },
+): Promise<string | null> {
+  const publishedAfter = new Date(
+    Date.now() - VIDEO_RECENCY_DAYS * 864e5,
+  ).toISOString();
+  const params = new URLSearchParams({
+    key: YOUTUBE_KEY as string,
+    q: query,
+    part: "snippet",
+    type: "video",
+    maxResults: "1",
+    order: "relevance",
+    videoEmbeddable: "true",
+    relevanceLanguage: opts.relevanceLanguage,
+    regionCode: opts.regionCode,
+    publishedAfter,
+    safeSearch: "strict",
+  });
+  if (opts.channelId) params.set("channelId", opts.channelId);
+
+  const res = await fetch(
+    `https://www.googleapis.com/youtube/v3/search?${params.toString()}`,
+    { signal: AbortSignal.timeout(10000) },
+  );
+  if (!res.ok) {
+    // 403 = מפתח/הרשאה פסולים (קבוע). מכבים את החיפוש לכל שאר התהליך.
+    if (res.status === 403) {
+      youtubeDisabled = true;
+      console.warn(
+        "[media] youtube -> HTTP 403; disabling video lookups for this process " +
+          "(check YOUTUBE_API_KEY: is YouTube Data API v3 enabled? key restricted?)",
+      );
+    } else {
+      console.warn(`[media] youtube -> HTTP ${res.status}`);
+    }
+    return null;
+  }
+  const data = (await res.json()) as {
+    items?: Array<{ id?: { videoId?: string } }>;
+  };
+  return data.items?.[0]?.id?.videoId ?? null;
+}
+
 /**
- * חיפוש סרטון YouTube רלוונטי. מחזיר videoId להטמעה, או null.
+ * חיפוש סרטון YouTube להטמעה, לפי בקשת המשתמש:
+ *   1) קודם סרטון *בעברית* על החדשה הספציפית (relevanceLanguage=he, אזור IL).
+ *   2) אם אין - סרטון מערוץ ה-YouTube של *ESPN* שמתאים בדיוק לחדשה (channelId).
+ * מעדיפים העלאות מהשבועות האחרונים כדי שהסרטון יהיה על האירוע הזה. best-effort.
  */
-export async function findVideo(query: string): Promise<string | null> {
-  if (!YOUTUBE_KEY || youtubeDisabled || !query.trim()) return null;
+export async function findVideo(q: VideoQuery): Promise<string | null> {
+  if (!YOUTUBE_KEY || youtubeDisabled) return null;
   try {
-    const url =
-      "https://www.googleapis.com/youtube/v3/search?" +
-      new URLSearchParams({
-        key: YOUTUBE_KEY,
-        q: query,
-        part: "snippet",
-        type: "video",
-        maxResults: "1",
-        videoEmbeddable: "true",
+    // 1) עברית מועדף
+    if (q.he && q.he.trim()) {
+      const he = await youtubeSearch(q.he.trim(), {
+        relevanceLanguage: "he",
+        regionCode: "IL",
+      });
+      if (he) return he;
+      if (youtubeDisabled) return null; // 403 - לא להמשיך לקריאה שנייה
+    }
+    // 2) גיבוי: ערוץ ESPN, בדיוק על החדשה הזו
+    if (q.en && q.en.trim()) {
+      const espn = await youtubeSearch(q.en.trim(), {
         relevanceLanguage: "en",
         regionCode: "US",
-        safeSearch: "strict",
-      }).toString();
-
-    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
-    if (!res.ok) {
-      // 403 = מפתח/הרשאה פסולים (קבוע). מכבים את החיפוש לכל שאר התהליך.
-      if (res.status === 403) {
-        youtubeDisabled = true;
-        console.warn(
-          "[media] youtube -> HTTP 403; disabling video lookups for this process " +
-            "(check YOUTUBE_API_KEY: is YouTube Data API v3 enabled? key restricted?)",
-        );
-      } else {
-        console.warn(`[media] youtube -> HTTP ${res.status}`);
-      }
-      return null;
+        channelId: ESPN_CHANNEL_ID,
+      });
+      if (espn) return espn;
     }
-    const data = (await res.json()) as {
-      items?: Array<{ id?: { videoId?: string } }>;
-    };
-    return data.items?.[0]?.id?.videoId ?? null;
+    return null;
   } catch (err) {
     console.warn(`[media] findVideo failed: ${(err as Error).message}`);
     return null;

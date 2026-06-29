@@ -9,7 +9,7 @@ import type {
 import { SOURCES } from "./sources";
 import { fetchAllSources } from "./rss";
 import { scrapeIsraeliSites } from "./scrape";
-import { selectCandidates, type ScoredItem } from "./relevance";
+import { selectCandidates, isTransaction, type ScoredItem } from "./relevance";
 import {
   generateArticles,
   expandArticle,
@@ -256,20 +256,26 @@ interface FoundMedia {
   videoId?: string;
 }
 
-/** איתור מדיה (תמונה + וידאו) לפי שאילתה, עם גיבוי לתמונת המקור. best-effort. */
-async function fetchMedia(query: string, fallbackImage?: string): Promise<FoundMedia> {
-  const q = query.trim();
+interface MediaQuery {
+  imageQuery: string; // שאילתת תמונה (אנגלית, שם שחקן/קבוצה)
+  videoHe?: string; // שאילתת סרטון עברי מועדף (כותרת הכתבה)
+  videoEn?: string; // שאילתת סרטון אנגלי (גיבוי ערוץ ESPN)
+  fallbackImage?: string; // תמונת מקור כגיבוי
+}
+
+/** איתור מדיה (תמונה + וידאו עברי-מועדף/ESPN) לפי שאילתות. best-effort. */
+async function fetchMedia(q: MediaQuery): Promise<FoundMedia> {
+  const imageQ = q.imageQuery.trim();
   const out: FoundMedia = {};
-  if (!q) {
-    if (fallbackImage) out.imageUrl = fallbackImage;
-    return out;
-  }
-  const [image, videoId] = await Promise.all([findImage(q), findVideo(q)]);
+  const [image, videoId] = await Promise.all([
+    imageQ ? findImage(imageQ) : Promise.resolve(null),
+    findVideo({ he: q.videoHe, en: q.videoEn }),
+  ]);
   if (image) {
     out.imageUrl = image.url;
     out.imageCredit = { source: image.source, link: image.link };
-  } else if (fallbackImage) {
-    out.imageUrl = fallbackImage;
+  } else if (q.fallbackImage) {
+    out.imageUrl = q.fallbackImage;
   }
   if (videoId) out.videoId = videoId;
   return out;
@@ -281,7 +287,12 @@ async function enrichArticleMedia(
   primary: RawItem,
 ): Promise<Article> {
   const base = toArticle(g, primary.publishedAt);
-  const media = await fetchMedia(g.imageQuery || g.headline || "", primary.image);
+  const media = await fetchMedia({
+    imageQuery: g.imageQuery || g.headline || "",
+    videoHe: g.headline, // כותרת עברית -> סרטון עברי מועדף
+    videoEn: g.imageQuery, // שם שחקן/קבוצה באנגלית -> גיבוי ערוץ ESPN
+    fallbackImage: primary.image,
+  });
   if (media.imageUrl) base.imageUrl = media.imageUrl;
   if (media.imageCredit) base.imageCredit = media.imageCredit;
   if (media.videoId) base.videoId = media.videoId;
@@ -324,7 +335,12 @@ async function buildUpdatedArticle(
 
   // שומרים את התמונה/וידאו הקיימים; משלימים רק אם אין תמונה כלל.
   if (!updated.imageUrl) {
-    const media = await fetchMedia(g.imageQuery || updated.headline, newPrimary.image);
+    const media = await fetchMedia({
+      imageQuery: g.imageQuery || updated.headline,
+      videoHe: updated.headline,
+      videoEn: g.imageQuery,
+      fallbackImage: newPrimary.image,
+    });
     if (media.imageUrl) updated.imageUrl = media.imageUrl;
     if (media.imageCredit) updated.imageCredit = media.imageCredit;
     if (!updated.videoId && media.videoId) updated.videoId = media.videoId;
@@ -473,6 +489,15 @@ export async function writeNext(max = 1): Promise<WriteResult> {
       related: group.related.map((r) => ({ ...r, score: 0 })),
     };
     const ctx = await buildWriteContext(group.category);
+
+    // כתבת כדורסל על עסקה/חתימה -> מפעיל מקטע ניתוח עומק (דינמיקת קבוצה +
+    // הערכת חשיבת ההנהלה). חל על אבדיה/NBA וכדורסל ישראלי בלבד.
+    const isBasketball =
+      group.category === "avdija" || group.category === "israeli_basketball";
+    const groupText = [group.primary, ...group.related]
+      .map((s) => `${s.title} ${s.summary || ""} ${s.fullText || ""}`)
+      .join(" ");
+    ctx.basketballTransaction = isBasketball && isTransaction(groupText);
 
     // ── מסלול הרחבה: סיפור מתפתח שמעדכן כתבה קיימת במקום לשכפל אותה ──
     if (group.updateOf) {

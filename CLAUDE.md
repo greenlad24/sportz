@@ -55,9 +55,16 @@ or on Vercel (Upstash Redis storage).
    **one** article from the whole group (multi-source synthesis) + updates, as
    JSON. For **avdija** groups, real verified season stats from `stats.ts`
    (balldontlie) are injected so the model can add numbers without fabricating.
-   The **dictionary** (`src/lib/dictionary.ts`) enforces correct Hebrew — no
-   second proofread pass.
-4. **Enrich media** (`media.ts`: Brave image + YouTube video, best-effort).
+   For **basketball trades/signings** (`relevance.isTransaction()` on an
+   avdija/israeli_basketball group → `ctx.basketballTransaction`), the prompt
+   requires a deep **"## ניתוח"** section: how it changes team dynamics, what to
+   know, and a *reasoned assessment* of management's thinking (roster/system/
+   dynamics) — framed as analysis, never invented facts. The **dictionary**
+   (`src/lib/dictionary.ts`) enforces correct Hebrew — no second proofread pass.
+4. **Enrich media** (`media.ts`, best-effort): Brave image; **video** prefers a
+   Hebrew clip about the news (`relevanceLanguage=he`, region IL), else falls
+   back to a video from the **ESPN YouTube channel** (`ESPN_YOUTUBE_CHANNEL_ID`)
+   matching the English query, biased to recent uploads (`VIDEO_RECENCY_DAYS`).
    Broken/expired image URLs fall back to a gradient placeholder client-side
    (`ArticleImage`/`TileImage` `onError`).
 5. **Store** — `store.mergeArticles()` dedupes by id/sourceUrl and persists.

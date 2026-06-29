@@ -105,6 +105,29 @@ export function isPolitical(text: string): boolean {
   return POLITICAL_TERMS.some((t) => hay.includes(t.toLowerCase()));
 }
 
+// מונחי עסקה/חתימה/העברה (עברית + אנגלית) - לזיהוי כתבות שדורשות מקטע ניתוח
+// כדורסל מעמיק (שינוי דינמיקת הקבוצה + הערכת חשיבת ההנהלה).
+const TRANSACTION_TERMS = [
+  // עברית
+  "חתם", "חתמה", "חתימה", "הוחתם", "החתים", "החתימה", "החתימו",
+  "עסקה", "טרייד", "הועבר", "העברה", "העברות", "הוחלף", "חילופי",
+  "חוזה", "הארכת חוזה", "סוכן חופשי", "שחרר", "שוחרר", "ויתרה עליו",
+  "רכש", "רכשה", "מצטרף", "הצטרף", "עזב", "פרש", "החתמה",
+  // אנגלית
+  "sign", "signed", "signing", "re-sign", "trade", "traded", "deal",
+  "acquire", "acquired", "waive", "waived", "release", "released",
+  "contract", "free agent", "joins", "agrees", "agreed", "buyout",
+];
+
+/**
+ * האם הפריט עוסק בעסקה/חתימה/העברה (טרייד, חתימה, סוכן חופשי, שחרור וכו').
+ * משמש כדי להפעיל מקטע ניתוח כדורסל מעמיק בכתבות כאלה.
+ */
+export function isTransaction(text: string): boolean {
+  const hay = text.toLowerCase();
+  return TRANSACTION_TERMS.some((t) => hay.includes(t.toLowerCase()));
+}
+
 function sourceWeight(sourceName: string): number {
   return SOURCES.find((s) => s.name === sourceName)?.weight ?? 3;
 }
