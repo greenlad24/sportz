@@ -1,6 +1,10 @@
 // טיפוסי הליבה של מנוע הניוז ושל אתר SPORTZ
 
-export type Category = "avdija" | "israeli_basketball" | "world_football";
+export type Category =
+  | "avdija"
+  | "nba"
+  | "israeli_basketball"
+  | "world_football";
 
 /** פריט גולמי שנשאב מ-RSS לפני עיבוד ע"י Claude */
 export interface RawItem {

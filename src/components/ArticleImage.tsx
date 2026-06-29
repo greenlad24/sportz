@@ -6,6 +6,7 @@ import type { Category } from "@/lib/types";
 
 const GRADIENTS: Record<Category, string> = {
   avdija: "from-brand to-[#6e2018]",
+  nba: "from-court to-[#0c3a82]",
   israeli_basketball: "from-ochre to-[#7a531a]",
   world_football: "from-olive to-[#3f5325]",
 };

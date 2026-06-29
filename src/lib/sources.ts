@@ -116,6 +116,33 @@ export const SOURCES: Source[] = [
     broad: true,
   },
 
+  // ─── NBA כללי - החדשות הגדולות מסביב לליגה ───
+  {
+    id: "gn-nba-he",
+    name: "Google News (NBA)",
+    lang: "he",
+    category: "nba",
+    url: googleNews("NBA כדורסל", "he"),
+    weight: 7,
+  },
+  {
+    id: "gn-nba-en",
+    name: "Google News (NBA)",
+    lang: "en",
+    category: "nba",
+    url: googleNews("NBA", "en"),
+    weight: 7,
+  },
+  {
+    id: "gn-nba-top-en",
+    name: "Google News (NBA Top)",
+    lang: "en",
+    category: "nba",
+    // הסיפורים הגדולים: עסקאות, MVP, פלייאוף, חתימות בולטות
+    url: googleNews("NBA trade OR signing OR MVP OR playoffs", "en"),
+    weight: 6,
+  },
+
   // ─── כדורסל ישראלי (20%) ───
   {
     id: "gn-maccabi",

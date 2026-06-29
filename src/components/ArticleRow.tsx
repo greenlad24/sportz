@@ -7,6 +7,7 @@ import { formatShortHe } from "@/lib/time";
 // צבע מד התגובות לפי קטגוריה
 const BADGE: Record<Category, string> = {
   avdija: "text-brand",
+  nba: "text-court",
   israeli_basketball: "text-ochre",
   world_football: "text-olive",
 };

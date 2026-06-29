@@ -101,17 +101,18 @@ export interface RefreshResult {
 }
 
 function emptyPerCat(): Record<Category, number> {
-  return { avdija: 0, israeli_basketball: 0, world_football: 0 };
+  return { avdija: 0, nba: 0, israeli_basketball: 0, world_football: 0 };
 }
 
 /**
  * תמהיל יעד "רך": אבדיה בעדיפות, אבל משאירים מקום למילוי משאר הקטגוריות.
  */
 function computeTargets(total: number): Record<Category, number> {
-  const avdija = Math.max(1, Math.round(total * 0.5));
-  const israeli = Math.max(1, Math.round(total * 0.25));
-  const football = Math.max(1, total - avdija - israeli);
-  return { avdija, israeli_basketball: israeli, world_football: football };
+  const avdija = Math.max(1, Math.round(total * 0.45));
+  const nba = Math.max(1, Math.round(total * 0.25));
+  const israeli = Math.max(1, Math.round(total * 0.2));
+  const football = Math.max(1, total - avdija - nba - israeli);
+  return { avdija, nba, israeli_basketball: israeli, world_football: football };
 }
 
 function validIso(value: string): string {
@@ -366,6 +367,7 @@ export async function planRefresh(): Promise<PlanResult> {
   // 2) סינון חינמי + אשכול (כמה מקורות על אותו אירוע -> אשכול אחד).
   const perCategoryCap: Record<Category, number> = {
     avdija: targets.avdija + 12,
+    nba: targets.nba + 12,
     israeli_basketball: targets.israeli_basketball + 12,
     world_football: targets.world_football + 12,
   };
@@ -491,13 +493,17 @@ export async function writeNext(max = 1): Promise<WriteResult> {
     const ctx = await buildWriteContext(group.category);
 
     // כתבת כדורסל על עסקה/חתימה -> מפעיל מקטע ניתוח עומק (דינמיקת קבוצה +
-    // הערכת חשיבת ההנהלה). חל על אבדיה/NBA וכדורסל ישראלי בלבד.
+    // הערכת חשיבת ההנהלה). חל על כל קטגוריות הכדורסל (אבדיה/NBA/כדורסל ישראלי).
     const isBasketball =
-      group.category === "avdija" || group.category === "israeli_basketball";
+      group.category === "avdija" ||
+      group.category === "nba" ||
+      group.category === "israeli_basketball";
     const groupText = [group.primary, ...group.related]
       .map((s) => `${s.title} ${s.summary || ""} ${s.fullText || ""}`)
       .join(" ");
     ctx.basketballTransaction = isBasketball && isTransaction(groupText);
+    // קטגוריית NBA: *כל* כתבה דורשת ניתוח כדורסל מעמיק + דעה מקצועית, בטון חיובי.
+    ctx.nbaExpertTake = group.category === "nba";
 
     // ── מסלול הרחבה: סיפור מתפתח שמעדכן כתבה קיימת במקום לשכפל אותה ──
     if (group.updateOf) {
@@ -538,6 +544,7 @@ export async function writeNext(max = 1): Promise<WriteResult> {
 
     const candidates: Record<Category, ScoredItem[]> = {
       avdija: [],
+      nba: [],
       israeli_basketball: [],
       world_football: [],
     };

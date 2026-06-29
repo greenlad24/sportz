@@ -20,9 +20,20 @@ export const CATEGORIES: Record<Category, CategoryMeta> = {
     short: "אבדיה",
     description:
       "כל מה שקורה עם דני אבדיה ופורטלנד טרייל בלייזרס - עדכונים, שמועות ועובדות ממקורות בארץ ובארה\"ב.",
-    targetShare: 70,
+    targetShare: 45,
     accent: "bg-brand text-white",
     bar: "bg-brand",
+  },
+  nba: {
+    slug: "nba",
+    category: "nba",
+    label: "NBA",
+    short: "NBA",
+    description:
+      "החדשות הגדולות מסביב ל-NBA - הכוכבים, העסקאות והמשחקים הגדולים, עם ניתוח כדורסל ודעה מקצועית.",
+    targetShare: 25,
+    accent: "bg-court text-white",
+    bar: "bg-court",
   },
   israeli_basketball: {
     slug: "israeli-basketball",
@@ -50,6 +61,7 @@ export const CATEGORIES: Record<Category, CategoryMeta> = {
 
 export const CATEGORY_ORDER: Category[] = [
   "avdija",
+  "nba",
   "israeli_basketball",
   "world_football",
 ];

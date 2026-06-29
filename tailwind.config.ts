@@ -42,6 +42,7 @@ const config: Config = {
         line: "#e3e3e6", // גבול אפור עדין
         ochre: "#C68A2E",
         olive: "#6E8B3D",
+        court: "#1D5BBF", // כחול ל-NBA (קטגוריית חדשות ה-NBA)
       },
       keyframes: {
         pulseLive: {
