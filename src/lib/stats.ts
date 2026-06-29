@@ -1,118 +1,111 @@
-// סטטיסטיקות NBA אמיתיות ומאומתות (לכתבות אבדיה/NBA), ממקור חינמי: balldontlie.
+// סטטיסטיקות NBA אמיתיות ומאומתות (לכתבות אבדיה/NBA), ממקור חינמי: ESPN.
 // הכלל הקשיח באתר הוא "לעולם אל תמציא עובדות ספורט"; כדי בכל זאת לתת לכתבות
-// עומק מספרי, אנחנו *מזריקים* לפרומפט נתוני עונה אמיתיים מ-API חיצוני - המודל
+// עומק מספרי, אנחנו *מזריקים* לפרומפט ממוצעי-עונה אמיתיים מ-ESPN - המודל
 // משתמש רק במספרים שסופקו לו ולא ממציא.
 //
-// אופציונלי לחלוטין (כמו Brave/YouTube): בלי BALLDONTLIE_API_KEY המודול מושבת
-// ומחזיר null, והכתבות נכתבות כרגיל ללא מספרים. מפתח חינמי: https://balldontlie.io
+// חינמי לחלוטין, ללא מפתח (אותו מקור כמו טבלאות הליגה). בעבר נוסה balldontlie,
+// אך נקודות הקצה של הסטטיסטיקות שם חסומות בלי מנוי בתשלום - ESPN נותן את זה חינם.
 
 import type { PlayerSeasonStats } from "./types";
 
-const BALLDONTLIE_KEY = process.env.BALLDONTLIE_API_KEY;
-const BASE = "https://api.balldontlie.io/v1";
+// מזהי שחקנים ב-ESPN (להזרקת ממוצעי-עונה). כרגע אבדיה בלבד (כוכב האתר).
+const ESPN_ATHLETES: Record<string, number> = {
+  avdija: 4683021, // Deni Avdija (Portland Trail Blazers)
+};
 
-// העונה הנוכחית (שנת הפתיחה). ניתן לעקוף ב-ENV כשמתחילה עונה חדשה.
-// balldontlie מצפה לשנת הפתיחה (2025 = עונת 2025-26).
-const SEASON = Number(process.env.NBA_SEASON || 2025);
-
-// שמירת תוצאות במטמון בזיכרון: נתוני עונה משתנים אטית (אחרי משחק), אין טעם
-// לקרוא ל-API בכל כתבה. TTL ברירת מחדל 6 שעות.
+// שמירת תוצאות במטמון בזיכרון: ממוצעי-עונה משתנים אטית (אחרי משחק). TTL 6 שעות.
 const CACHE_TTL_MS = Number(process.env.STATS_TTL_HOURS || 6) * 36e5;
 const cache = new Map<string, { at: number; value: PlayerSeasonStats | null }>();
 
-interface BdlPlayer {
-  id: number;
-  first_name: string;
-  last_name: string;
-  team?: { full_name?: string };
+interface EspnStatSplit {
+  season?: { year?: number; displayName?: string };
+  stats?: string[];
+}
+interface EspnStatCategory {
+  name?: string;
+  labels?: string[];
+  statistics?: EspnStatSplit[];
 }
 
-interface BdlSeasonAverages {
-  pts?: number;
-  reb?: number;
-  ast?: number;
-  stl?: number;
-  blk?: number;
-  fg_pct?: number;
-  fg3_pct?: number;
-  min?: string | number;
-  games_played?: number;
+function num(v: string | undefined): number | undefined {
+  if (v === undefined) return undefined;
+  const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ""));
+  return Number.isNaN(n) ? undefined : n;
 }
 
-async function bdlFetch<T>(path: string): Promise<T | null> {
+/** ממיר split (labels + stats) ל-PlayerSeasonStats לפי שמות העמודות של ESPN. */
+function parseAverages(
+  name: string,
+  labels: string[],
+  split: EspnStatSplit,
+): PlayerSeasonStats {
+  const by = new Map<string, string>();
+  (split.stats ?? []).forEach((v, i) => by.set(labels[i], v));
+  const g = (k: string) => num(by.get(k));
+  return {
+    name,
+    season: split.season?.displayName || String(split.season?.year || ""),
+    gamesPlayed: g("GP"),
+    points: g("PTS"),
+    rebounds: g("REB"),
+    assists: g("AST"),
+    steals: g("STL"),
+    blocks: g("BLK"),
+    fgPct: g("FG%"),
+    fg3Pct: g("3P%"),
+    minutes: g("MIN") !== undefined ? Math.round(g("MIN")!) : undefined,
+  };
+}
+
+async function fetchEspnSeasonStats(
+  name: string,
+  athleteId: number,
+): Promise<PlayerSeasonStats | null> {
   try {
-    const res = await fetch(`${BASE}${path}`, {
-      headers: { Authorization: BALLDONTLIE_KEY as string },
-      signal: AbortSignal.timeout(10000),
-    });
+    const res = await fetch(
+      `https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${athleteId}/stats`,
+      { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(10000) },
+    );
     if (!res.ok) {
-      console.warn(`[stats] balldontlie ${path} -> HTTP ${res.status}`);
+      console.warn(`[stats] espn ${athleteId} -> HTTP ${res.status}`);
       return null;
     }
-    return (await res.json()) as T;
+    const data = (await res.json()) as { categories?: EspnStatCategory[] };
+    const avg = data.categories?.find((c) => c.name === "averages");
+    const labels = avg?.labels;
+    const splits = avg?.statistics;
+    if (!labels || !splits || splits.length === 0) return null;
+    // העונה האחרונה: בעלת ה-year הגבוה ביותר (נפילה לאחרון ברשימה).
+    const latest =
+      [...splits].sort(
+        (a, b) => (a.season?.year ?? 0) - (b.season?.year ?? 0),
+      )[splits.length - 1] ?? splits[splits.length - 1];
+    return parseAverages(name, labels, latest);
   } catch (err) {
-    console.warn(`[stats] balldontlie ${path} failed: ${(err as Error).message}`);
+    console.warn(`[stats] espn ${athleteId} failed: ${(err as Error).message}`);
     return null;
   }
 }
 
-/** "34:12" / 34 -> 34 (דקות שלמות) */
-function toMinutes(min: string | number | undefined): number | undefined {
-  if (min === undefined) return undefined;
-  if (typeof min === "number") return Math.round(min);
-  const n = parseInt(String(min).split(":")[0], 10);
-  return Number.isNaN(n) ? undefined : n;
-}
-
 /**
- * סטטיסטיקות העונה של שחקן לפי שם (best-effort). מאתר את מזהה השחקן ואז שולף
- * ממוצעי עונה. ממוּטמח. מחזיר null אם אין מפתח / לא נמצא / נכשל.
+ * ממוצעי-העונה של שחקן לפי שם (best-effort, ממוטמח). מחזיר null אם השחקן אינו
+ * ברשימת המזהים או שהשאיבה נכשלה.
  */
 export async function getPlayerSeasonStats(
   name: string,
 ): Promise<PlayerSeasonStats | null> {
-  if (!BALLDONTLIE_KEY) return null;
   const key = name.toLowerCase().trim();
+  const athleteId = ESPN_ATHLETES[key];
+  if (!athleteId) return null;
+
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value;
 
-  const value = await fetchPlayerSeasonStats(name);
+  const value = await fetchEspnSeasonStats(name, athleteId);
+  // קובעים את שם התצוגה התקני
+  if (value) value.name = "דני אבדיה";
   cache.set(key, { at: Date.now(), value });
   return value;
-}
-
-async function fetchPlayerSeasonStats(
-  name: string,
-): Promise<PlayerSeasonStats | null> {
-  const search = await bdlFetch<{ data?: BdlPlayer[] }>(
-    `/players?search=${encodeURIComponent(name)}&per_page=5`,
-  );
-  const player = search?.data?.[0];
-  if (!player) return null;
-
-  const avg = await bdlFetch<{ data?: BdlSeasonAverages[] }>(
-    `/season_averages?season=${SEASON}&player_ids[]=${player.id}`,
-  );
-  const a = avg?.data?.[0];
-  if (!a) return null;
-
-  const round1 = (n?: number) =>
-    typeof n === "number" ? Math.round(n * 10) / 10 : undefined;
-
-  return {
-    name: `${player.first_name} ${player.last_name}`.trim(),
-    season: `${SEASON}-${String((SEASON + 1) % 100).padStart(2, "0")}`,
-    team: player.team?.full_name,
-    gamesPlayed: a.games_played,
-    points: round1(a.pts),
-    rebounds: round1(a.reb),
-    assists: round1(a.ast),
-    steals: round1(a.stl),
-    blocks: round1(a.blk),
-    fgPct: round1(a.fg_pct),
-    fg3Pct: round1(a.fg3_pct),
-    minutes: toMinutes(a.min),
-  };
 }
 
 /** סטטיסטיקות דני אבדיה לעונה הנוכחית (קיצור דרך). */
@@ -120,4 +113,5 @@ export function getAvdijaStats(): Promise<PlayerSeasonStats | null> {
   return getPlayerSeasonStats("Avdija");
 }
 
-export const statsConfig = { enabled: Boolean(BALLDONTLIE_KEY) };
+// סטטיסטיקות זמינות תמיד (מקור חינמי, ללא מפתח).
+export const statsConfig = { enabled: true };

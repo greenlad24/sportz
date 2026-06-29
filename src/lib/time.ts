@@ -1,5 +1,10 @@
 // פורמט זמן יחסי בעברית ("לפני 5 דקות" וכו')
 
+// אזור הזמן המקומי של האתר (ישראל). חשוב: השרת רץ ב-UTC, ובלי לקבוע אזור זמן
+// מפורש כל הזמנים המוחלטים (שעה/תאריך) היו מוצגים ב-UTC - שעתיים/שלוש פחות
+// מהשעון בישראל. קביעת Asia/Jerusalem מציגה את כל זמני הכתבות בשעון המקומי.
+const TZ = "Asia/Jerusalem";
+
 export function timeAgoHe(iso: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
@@ -34,6 +39,7 @@ export function timeAgoHe(iso: string): string {
     day: "numeric",
     month: "long",
     year: "numeric",
+    timeZone: TZ,
   }).format(then);
 }
 
@@ -44,11 +50,13 @@ export function formatShortHe(iso: string): string {
   const time = new Intl.DateTimeFormat("he-IL", {
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: TZ,
   }).format(t);
   const date = new Intl.DateTimeFormat("he-IL", {
     day: "2-digit",
     month: "2-digit",
     year: "2-digit",
+    timeZone: TZ,
   }).format(t);
   return `${time} - ${date}`;
 }
@@ -63,5 +71,6 @@ export function formatDateHe(iso: string): string {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: TZ,
   }).format(t);
 }

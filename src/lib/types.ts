@@ -145,7 +145,7 @@ export interface PlayerSeasonStats {
   assists?: number; // ממוצע אסיסטים
   steals?: number;
   blocks?: number;
-  fgPct?: number; // אחוז קליעה מהשדה (0-1)
-  fg3Pct?: number; // אחוז קליעה לשלוש
+  fgPct?: number; // אחוז קליעה מהשדה (אחוז, 0-100)
+  fg3Pct?: number; // אחוז קליעה לשלוש (אחוז, 0-100)
   minutes?: number; // דקות ממוצעות
 }
