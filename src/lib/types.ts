@@ -11,6 +11,13 @@ export interface RawItem {
   lang: "he" | "en";
   category: Category;
   publishedAt: string; // ISO
+  /**
+   * האם תאריך הפרסום *אומת* מתוך מטא-דאטה של עמוד הכתבה עצמו (JSON-LD
+   * datePublished / meta / <time>), להבדיל מתאריך פיד/Google News שעלול לשקף
+   * זמן אינדוקס ולא זמן פרסום אמיתי. רק פריט עם dateVerified=true *וגם* בתוך
+   * חלון 24 השעות נכתב - כך מוודאים שזו חדשה אמיתית ולא ישנה ש"צפה" מחדש.
+   */
+  dateVerified?: boolean;
   image?: string; // תמונה שחולצה מהמקור (אם קיימת)
   fullText?: string; // גוף הכתבה המלא מהמקור (נשאב לפני יצירה, לעומק ודיוק)
 }

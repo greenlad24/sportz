@@ -112,6 +112,8 @@ function collectLd(node: unknown, site: HtmlSite, out: RawItem[]) {
     const title = stripHtml(headline);
     const category = inferCategory(`${title} ${obj.description || ""}`);
     if (category && title.length >= 12) {
+      // datePublished מתוך ה-JSON-LD של הכתבה = תאריך *מאומת* (מעמוד הכתבה).
+      const publishedAt = toIso(obj.datePublished);
       out.push({
         title,
         summary: stripHtml(String(obj.description || "")),
@@ -119,7 +121,8 @@ function collectLd(node: unknown, site: HtmlSite, out: RawItem[]) {
         source: site.name,
         lang: "he",
         category,
-        publishedAt: toIso(obj.datePublished),
+        publishedAt,
+        dateVerified: Boolean(publishedAt),
         image: ldImage(obj.image),
       });
     }

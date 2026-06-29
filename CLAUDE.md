@@ -21,13 +21,17 @@ or on Vercel (Upstash Redis storage).
    primary + related. **Resolves Google News redirect links** to the publisher
    URL first (base64 decode → redirect-follow), so full text is actually
    fetched (~half of items in practice).
-5. **Hard freshness gate** — after enrichment, `extract.ts` also pulls each
-   item's **real publish date** (JSON-LD `datePublished` / meta tags). A group
-   is kept only if that date is within `FRESH_WINDOW_HOURS` (default 24). Items
-   with an unknown/unverifiable date are **dropped** — this is the fix for "old
-   news that shows up on Google News but isn't really news." Missing RSS/scrape
-   dates are no longer stamped `now` (they become `""` → fail the gate unless a
-   real date is recovered).
+5. **Hard freshness gate (verified-fresh only)** — after enrichment,
+   `extract.ts` pulls each item's **real publish date** from the article page
+   (JSON-LD `datePublished` / meta / `<time>`) and sets `dateVerified=true`. A
+   group is kept only if its date is **both verified from the page AND within**
+   `FRESH_WINDOW_HOURS` (default 24). Feed/Google-News dates are **not** trusted
+   on their own (they can reflect index time, not publish time), and items whose
+   date can't be verified are **dropped**. This is the fix for "old news that
+   shows up on Google News but isn't really news." It also runs again at write
+   time (see Phase 2) as a final guard. Trade-off: items whose page exposes no
+   parseable date (~half — unresolved GN links, Reddit) are dropped, lowering
+   volume in exchange for the freshness guarantee.
 6. **Topic dedup → grow, not just drop** — `dedup.ts`: each group gets a
    `topicSignature`. If it matches an **existing published article**
    (`findDuplicateTopic` returns its id), the group is enqueued as an
@@ -38,6 +42,10 @@ or on Vercel (Upstash Redis storage).
 
 **Phase 2 — `writeNext()` (every ~2 min, `/api/write`):**
 1. **Pop one group** (highest score) from the queue.
+1a. **Final freshness re-check** — `isVerifiedFresh(primary, 24h + QUEUE_TTL)`:
+   the popped group must still have a page-verified date inside the window or
+   it's skipped (`skippedStale`). Guarantees we never write an old story even if
+   it aged in the queue.
 2. **Update path** — if the group has `updateOf` (a developing story), load that
    article and call `llm.expandArticle()` to **merge the new facts into it and
    grow it**; `store.updateArticle()` saves it in place (same id/slug, bumps

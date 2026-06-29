@@ -236,7 +236,12 @@ export async function fetchArticle(url: string): Promise<FetchedArticle | null> 
  * מחזיר כמה פריטים הועשרו בטקסט מלא.
  */
 export async function enrichWithArticleText<
-  T extends { link: string; fullText?: string; publishedAt?: string },
+  T extends {
+    link: string;
+    fullText?: string;
+    publishedAt?: string;
+    dateVerified?: boolean;
+  },
 >(items: T[], concurrency = 6): Promise<number> {
   let enriched = 0;
   let next = 0;
@@ -246,7 +251,11 @@ export async function enrichWithArticleText<
       const fetched = await fetchArticle(it.link);
       if (fetched) {
         it.fullText = fetched.text;
-        if (fetched.publishedAt) it.publishedAt = fetched.publishedAt;
+        // תאריך מעמוד הכתבה = תאריך *מאומת* (זה הקובע אם הפריט ייכתב).
+        if (fetched.publishedAt) {
+          it.publishedAt = fetched.publishedAt;
+          it.dateVerified = true;
+        }
         enriched++;
       }
     }

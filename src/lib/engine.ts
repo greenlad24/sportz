@@ -46,17 +46,28 @@ import { CATEGORIES } from "./categories";
 const DEDUP_WINDOW_HOURS = Number(process.env.DEDUP_WINDOW_HOURS || 168);
 // תקציב טוקנים לכתבה בודדת (כולל "חשיבה" של ה-Flash). מספיק לכתבה מלאה.
 const ARTICLE_MAX_TOKENS = Number(process.env.ARTICLE_MAX_TOKENS || 8000);
-// גייט טריות קשיח: אחרי שאיבת תאריך הפרסום *האמיתי* של כל אשכול, נכתבים רק
-// אשכולות שהאירוע שלהם באמת מ-N השעות האחרונות (ברירת מחדל 24). אשכול שתאריכו
-// ישן יותר, או שלא ניתן לאמת את תאריכו - נזרק. זה מונע "חדשות ישנות" שמופיעות
-// ב-Google News אך אינן חדשות אמיתיות.
+// גייט טריות קשיח: נכתבים רק אשכולות שתאריך הפרסום שלהם *אומת מעמוד הכתבה*
+// (JSON-LD/meta) *וגם* נמצא בתוך חלון N השעות (ברירת מחדל 24). פריט שלא ניתן
+// לאמת את תאריכו - נזרק (מדיניות "verified-fresh only"). זה מונע "חדשות ישנות"
+// שמופיעות ב-Google News אך אינן חדשות אמיתיות, ולא סומכים על תאריך הפיד/האינדוקס.
 const FRESH_WINDOW_HOURS = Number(process.env.FRESH_WINDOW_HOURS || 24);
+// מרווח להמתנת אשכול בתור (תואם ל-QUEUE_TTL_HOURS): פריט שאומת כטרי בזמן
+// התכנון רשאי להיכתב גם אם בינתיים המתין בתור עד QUEUE_TTL_HOURS שעות.
+const QUEUE_TTL_HOURS = Number(process.env.QUEUE_TTL_HOURS || 6);
 
-/** האם תאריך הפרסום ידוע ובתוך חלון הטריות (ברירת מחדל 24 שעות) */
-function isFreshEnough(publishedAt: string): boolean {
-  const t = new Date(publishedAt).getTime();
-  if (Number.isNaN(t)) return false; // תאריך לא ידוע = לא ניתן לאמת -> לא טרי
-  return t >= Date.now() - FRESH_WINDOW_HOURS * 36e5;
+/**
+ * האם הפריט עבר אימות-טריות: תאריכו *אומת* מעמוד הכתבה (dateVerified) *וגם* הוא
+ * בתוך חלון השעות הנתון. windowHours ברירת מחדל = FRESH_WINDOW_HOURS; בזמן
+ * הכתיבה נותנים גם מרווח להמתנה בתור (ראו הקריאה ב-writeNext).
+ */
+function isVerifiedFresh(
+  item: { publishedAt: string; dateVerified?: boolean },
+  windowHours = FRESH_WINDOW_HOURS,
+): boolean {
+  if (!item.dateVerified) return false; // לא אומת = לא ניתן לקבוע שזו חדשה -> נזרק
+  const t = new Date(item.publishedAt).getTime();
+  if (Number.isNaN(t)) return false;
+  return t >= Date.now() - windowHours * 36e5;
 }
 
 /** תוצאת שלב התכנון: שאיבה -> אשכול -> דה-דופ -> הכנסה לתור */
@@ -78,6 +89,7 @@ export interface WriteResult {
   written: number; // כתבות חדשות שנכתבו
   updated: number; // כתבות קיימות שהורחבו (סיפור מתפתח)
   skippedDup: number; // נושא שכוסה בין הכניסה לתור לכתיבה
+  skippedStale: number; // נפסל באימות-טריות לפני הכתיבה (לא מאומת/ישן מ-24 שעות)
   perCategory: Record<Category, number>;
   durationMs: number;
 }
@@ -144,6 +156,7 @@ function stripScored(it: ScoredItem | RawItem): RawItem {
     lang: it.lang,
     category: it.category,
     publishedAt: it.publishedAt,
+    dateVerified: it.dateVerified,
     image: it.image,
     fullText: it.fullText,
   };
@@ -366,13 +379,15 @@ export async function planRefresh(): Promise<PlanResult> {
     console.log(`[plan] full text: ${enriched}/${enrichList.length} items`);
   }
 
-  // 2.3) גייט טריות קשיח: אחרי ששאבנו את תאריך הפרסום *האמיתי* של כל אשכול
-  //      (it.publishedAt עודכן ב-enrich), שומרים רק אשכולות שהאירוע שלהם באמת
-  //      מ-24 השעות האחרונות. אשכול ישן או שתאריכו לא נודע - נזרק (ולא ייכתב).
-  const fresh = groups.filter((it) => isFreshEnough(it.publishedAt));
+  // 2.3) גייט טריות קשיח (verified-fresh only): אחרי ששאבנו את תאריך הפרסום
+  //      *המאומת* מעמוד כל אשכול, שומרים רק אשכולות שתאריכם אומת *וגם* נמצא
+  //      בתוך 24 השעות. אשכול ישן, או שלא ניתן לאמת את תאריכו - נזרק (לא ייכתב).
+  const fresh = groups.filter((it) => isVerifiedFresh(it));
   const droppedStale = groups.length - fresh.length;
   if (droppedStale > 0) {
-    console.log(`[plan] dropped stale (not last ${FRESH_WINDOW_HOURS}h): ${droppedStale}`);
+    console.log(
+      `[plan] dropped unverified/stale (not verified within ${FRESH_WINDOW_HOURS}h): ${droppedStale}`,
+    );
   }
 
   // 3) דה-דופ קשיח ברמת נושא: מול כתבות שכוסו (חלון) + מול אשכולות שכבר
@@ -435,12 +450,21 @@ export async function writeNext(max = 1): Promise<WriteResult> {
   let written = 0;
   let updated = 0;
   let skippedDup = 0;
+  let skippedStale = 0;
   const perCategory = emptyPerCat();
 
   for (let i = 0; i < max; i++) {
     const group = await popGroup();
     if (!group) break;
     popped++;
+
+    // אימות-טריות סופי *ממש לפני הכתיבה*: נכתבים רק אשכולות שתאריכם אומת מעמוד
+    // הכתבה ועדיין בתוך החלון (24 שעות + מרווח ההמתנה בתור). זהו הגייט שמבטיח
+    // שלא נכתבת כתבה על חדשה ישנה - גם אם משהו השתנה מאז התכנון.
+    if (!isVerifiedFresh(group.primary, FRESH_WINDOW_HOURS + QUEUE_TTL_HOURS)) {
+      skippedStale++;
+      continue;
+    }
 
     // בניית "מועמד" יחיד מהאשכול (ראשי + מקורות-משנה) - משמש את שני המסלולים.
     const item: ScoredItem = {
@@ -538,6 +562,7 @@ export async function writeNext(max = 1): Promise<WriteResult> {
     written,
     updated,
     skippedDup,
+    skippedStale,
     perCategory,
     durationMs: Date.now() - startedAt,
   };
