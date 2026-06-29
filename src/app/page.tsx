@@ -54,8 +54,11 @@ export default async function HomePage() {
   const usedIds = new Set([mainStory?.id]);
   const latest = ranked.filter((a) => !usedIds.has(a.id)).slice(0, 10);
 
-  // ברירת מחדל ל"המלצות לקריאה" עד שנצבר פרופיל עניין ב-localStorage
-  const foryouFallback = latest.slice(0, 8);
+  // מאגר ל"המלצות לקריאה": רחב (עד 24) כדי שיישאר מספיק אחרי סינון הנקראו
+  // וערבוב יומי בצד הלקוח. ברירת מחדל עד שנצבר פרופיל עניין/היסטוריית קריאה.
+  const foryouFallback = ranked
+    .filter((a) => !usedIds.has(a.id))
+    .slice(0, 24);
 
   return (
     <div className="mx-auto max-w-site px-4 py-5">

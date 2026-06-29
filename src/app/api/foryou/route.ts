@@ -35,7 +35,8 @@ export async function GET(req: NextRequest) {
         new Date(y.a.publishedAt).getTime() -
           new Date(x.a.publishedAt).getTime(),
     )
-    .slice(0, 8)
+    // מאגר רחב (הלקוח מסנן נקראו, מערבב לפי היום וחותך ל-8). 24 משאיר מספיק.
+    .slice(0, 24)
     .map((x) => x.a);
 
   return NextResponse.json({ articles: ranked });

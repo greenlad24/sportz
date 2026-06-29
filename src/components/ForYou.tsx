@@ -2,13 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { RecommendedSlider } from "./RecommendedSlider";
-import { topInterests } from "@/lib/interests";
+import { topInterests, getReadIds, dailyShuffle } from "@/lib/interests";
 import type { Article } from "@/lib/types";
 
+const SHOW = 8;
+
 /**
- * "המלצות לקריאה" - מותאם לפי תחומי העניין שנשמרו ב-localStorage.
- * לפני שיש היסטוריית קריאה מציגים ברירת מחדל (fallback) מהשרת,
- * כדי שהמקטע יופיע תמיד מתחת לסיפור הראשי.
+ * "המלצות לקריאה". שני כללים לפי בקשת המשתמש:
+ *  1. *מתחלפות כל 24 שעות* - ערבוב דטרמיניסטי לפי היום (dailyShuffle).
+ *  2. *לא מציגות כתבה שכבר נכנסו אליה* - מסננים את ה-IDs שנקראו (localStorage).
+ * בנוסף, אם יש פרופיל עניין - מביאים רשימה מותאמת מהשרת (גם היא מסוננת/מעורבבת).
  */
 export function ForYou({
   fallback,
@@ -21,23 +24,34 @@ export function ForYou({
   const [personalized, setPersonalized] = useState(false);
 
   useEffect(() => {
+    const read = getReadIds();
+    // סינון נקראו + הסיפור הראשי, ואז ערבוב יומי וחיתוך למספר המוצג.
+    const refine = (pool: Article[]) =>
+      dailyShuffle(
+        pool.filter((a) => a.id !== excludeId && !read.has(a.id)),
+      ).slice(0, SHOW);
+
+    // התחלה: ברירת המחדל מהשרת, כבר מסוננת ומעורבבת ליום.
+    setItems(refine(fallback));
+
     const { cats, tags } = topInterests();
-    if (cats.length === 0 && tags.length === 0) return; // נשארים עם ברירת המחדל
     const params = new URLSearchParams();
     if (cats.length) params.set("cats", cats.join(","));
     if (tags.length) params.set("tags", tags.join(","));
-    if (excludeId) params.set("exclude", excludeId);
+    const exclude = [excludeId, ...read].filter(Boolean) as string[];
+    if (exclude.length) params.set("exclude", exclude.join(","));
 
+    // מביאים מאגר רחב מהשרת (כבר ללא הנקראו), ומעדנים אותו באותו אופן.
     fetch(`/api/foryou?${params.toString()}`)
       .then((r) => r.json())
       .then((j) => {
         if (Array.isArray(j.articles) && j.articles.length > 0) {
-          setItems(j.articles);
-          setPersonalized(true);
+          setItems(refine(j.articles));
+          setPersonalized(cats.length > 0 || tags.length > 0);
         }
       })
       .catch(() => {});
-  }, [excludeId]);
+  }, [excludeId, fallback]);
 
   if (items.length === 0) return null;
 

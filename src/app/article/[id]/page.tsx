@@ -128,7 +128,11 @@ export default async function ArticlePage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <ViewTracker category={article.category} tags={article.tags} />
+      <ViewTracker
+        id={article.id}
+        category={article.category}
+        tags={article.tags}
+      />
 
       <div className="flex flex-col gap-6 lg:flex-row">
         {/* תוכן ראשי - מימין */}
