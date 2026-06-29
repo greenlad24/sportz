@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { getArticles } from "@/lib/store";
 import { categoryBySlug } from "@/lib/categories";
 import { ArticleCard } from "@/components/ArticleCard";
@@ -55,6 +56,12 @@ export default async function CategoryPage({
         <p className="mt-3 max-w-2xl text-sm leading-6 text-ink-muted">
           {c.description}
         </p>
+        <Link
+          href={`/standings/${c.slug}`}
+          className="mt-3 inline-block text-sm font-bold text-brand hover:underline"
+        >
+          טבלת ליגה ומעברים ←
+        </Link>
       </header>
 
       {items.length === 0 ? (

@@ -9,6 +9,7 @@ const NAV = [
     href: `/category/${CATEGORIES[cat].slug}`,
     label: CATEGORIES[cat].label,
   })),
+  { href: "/standings", label: "טבלאות" },
   { href: "/schedule", label: "לוח שידורים" },
   { href: "/about", label: "אודות" },
 ];
