@@ -34,6 +34,7 @@ export interface Article {
   videoId?: string; // מזהה סרטון YouTube להטמעה בתוך הכתבה (אם נמצא)
   publishedAt: string; // ISO - זמן האירוע/המקור
   createdAt: string; // ISO - זמן יצירת הכתבה אצלנו
+  updatedAt?: string; // ISO - עודכן לאחרונה (כשסיפור מתפתח וגדל); קיים רק אם עודכן
 }
 
 /** מבנה הפלט שמבקשים מ-Claude */
@@ -115,4 +116,25 @@ export interface QueuedGroup {
   sig: string; // חתימת נושא (טוקנים מנורמלים) - לזיהוי כפילויות בין-ריצתי
   score: number; // ניקוד רלוונטיות (לדירוג בתור)
   enqueuedAt: string; // ISO - מתי נכנס לתור (ל-TTL וסדר שליפה)
+  /**
+   * אם מוגדר: האשכול הזה אינו כתבה חדשה אלא *התפתחות* של סיפור שכבר כיסינו.
+   * הערך הוא ה-id של הכתבה הקיימת; שלב הכתיבה ירחיב/יעדכן אותה במקום ליצור כפילות.
+   */
+  updateOf?: string;
+}
+
+/** סטטיסטיקות עונה מאומתות לשחקן (מקור חיצוני חינמי) - להזרקה לפרומפט */
+export interface PlayerSeasonStats {
+  name: string; // שם השחקן
+  season: string; // תווית העונה, למשל "2025-26"
+  team?: string; // קבוצה נוכחית
+  gamesPlayed?: number;
+  points?: number; // ממוצע נקודות למשחק
+  rebounds?: number; // ממוצע ריבאונדים
+  assists?: number; // ממוצע אסיסטים
+  steals?: number;
+  blocks?: number;
+  fgPct?: number; // אחוז קליעה מהשדה (0-1)
+  fg3Pct?: number; // אחוז קליעה לשלוש
+  minutes?: number; // דקות ממוצעות
 }

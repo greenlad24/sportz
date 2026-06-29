@@ -119,6 +119,64 @@ function articleBodyFromJsonLd(html: string): string | null {
   return null;
 }
 
+/** חיפוש datePublished/dateCreated בתוך JSON-LD (המקור האמין לתאריך הפרסום) */
+function findDatePublished(node: unknown): string | null {
+  if (!node || typeof node !== "object") return null;
+  if (Array.isArray(node)) {
+    for (const n of node) {
+      const d = findDatePublished(n);
+      if (d) return d;
+    }
+    return null;
+  }
+  const o = node as Record<string, unknown>;
+  for (const key of ["datePublished", "dateCreated", "uploadDate"]) {
+    const v = o[key];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  if (o["@graph"]) {
+    const d = findDatePublished(o["@graph"]);
+    if (d) return d;
+  }
+  return null;
+}
+
+/**
+ * תאריך הפרסום *האמיתי* של הכתבה מתוך ה-HTML: קודם JSON-LD (datePublished),
+ * ואז תגיות meta נפוצות. מחזיר ISO תקין או null. זהו הבסיס לאימות "באמת מ-24
+ * השעות האחרונות" - להבדיל מזמן האינדוקס של Google News.
+ */
+function extractPublishedAt(html: string): string | null {
+  const re =
+    /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    try {
+      const date = findDatePublished(JSON.parse(m[1].trim()));
+      if (date) {
+        const t = new Date(date).getTime();
+        if (!Number.isNaN(t)) return new Date(t).toISOString();
+      }
+    } catch {
+      // JSON לא תקין - דלג
+    }
+  }
+  // גיבוי: תגיות meta נפוצות לזמן פרסום
+  const metaPatterns = [
+    /<meta[^>]+property=["']article:published_time["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+name=["'](?:pubdate|publishdate|date|dc\.date|sailthru\.date)["'][^>]+content=["']([^"']+)["']/i,
+    /<time[^>]+datetime=["']([^"']+)["'][^>]*>/i,
+  ];
+  for (const p of metaPatterns) {
+    const mm = html.match(p);
+    if (mm) {
+      const t = new Date(mm[1]).getTime();
+      if (!Number.isNaN(t)) return new Date(t).toISOString();
+    }
+  }
+  return null;
+}
+
 /** גיבוי: איחוד הטקסט מתגיות <p> משמעותיות (אחרי הסרת script/style) */
 function textFromParagraphs(html: string): string | null {
   const cleaned = html
@@ -133,11 +191,16 @@ function textFromParagraphs(html: string): string | null {
   return joined.length > 200 ? joined : null;
 }
 
+export interface FetchedArticle {
+  text: string; // גוף הכתבה הנקי (עד MAX_CHARS)
+  publishedAt?: string; // תאריך הפרסום האמיתי (ISO), אם נמצא ב-HTML
+}
+
 /**
- * שאיבת גוף הכתבה המלא מ-URL. קישורי Google News נפתרים תחילה ל-URL המקור.
- * מחזיר טקסט נקי (עד MAX_CHARS) או null.
+ * שאיבת גוף הכתבה המלא + תאריך הפרסום האמיתי מ-URL. קישורי Google News נפתרים
+ * תחילה ל-URL המקור. מחזיר {text, publishedAt?} או null.
  */
-export async function fetchArticleText(url: string): Promise<string | null> {
+export async function fetchArticle(url: string): Promise<FetchedArticle | null> {
   const real = await resolveArticleUrl(url);
   if (!real || !isFetchable(real)) return null;
   try {
@@ -156,27 +219,34 @@ export async function fetchArticleText(url: string): Promise<string | null> {
     const body = articleBodyFromJsonLd(html) || textFromParagraphs(html);
     if (!body) return null;
     const norm = body.replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
-    return norm.slice(0, MAX_CHARS);
+    return {
+      text: norm.slice(0, MAX_CHARS),
+      publishedAt: extractPublishedAt(html) ?? undefined,
+    };
   } catch {
     return null;
   }
 }
 
 /**
- * העשרת פריטים בטקסט מלא מהמקור, במקביל עם תקרת מקביליות (כדי לא להציף
- * את היעדים). משנה את הפריטים במקום (it.fullText) ומחזיר כמה הועשרו.
+ * העשרת פריטים מהמקור, במקביל עם תקרת מקביליות. משנה את הפריטים במקום:
+ * - it.fullText = גוף הכתבה המלא (כשנשאב).
+ * - it.publishedAt = תאריך הפרסום *האמיתי* (כשנמצא ב-HTML) - גובר על הזמן
+ *   מ-RSS/Google News, ומאפשר אימות-טריות מדויק (האם באמת מ-24 השעות).
+ * מחזיר כמה פריטים הועשרו בטקסט מלא.
  */
 export async function enrichWithArticleText<
-  T extends { link: string; fullText?: string },
+  T extends { link: string; fullText?: string; publishedAt?: string },
 >(items: T[], concurrency = 6): Promise<number> {
   let enriched = 0;
   let next = 0;
   async function worker() {
     while (next < items.length) {
       const it = items[next++];
-      const text = await fetchArticleText(it.link);
-      if (text) {
-        it.fullText = text;
+      const fetched = await fetchArticle(it.link);
+      if (fetched) {
+        it.fullText = fetched.text;
+        if (fetched.publishedAt) it.publishedAt = fetched.publishedAt;
         enriched++;
       }
     }

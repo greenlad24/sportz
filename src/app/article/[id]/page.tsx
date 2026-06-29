@@ -12,7 +12,7 @@ import { CommentsSection } from "@/components/CommentsSection";
 import { MostViewed } from "@/components/MostViewed";
 import { CategoryTiles } from "@/components/CategoryTiles";
 import { AdSlot } from "@/components/AdSlot";
-import { formatDateHe } from "@/lib/time";
+import { formatDateHe, timeAgoHe } from "@/lib/time";
 import { SITE, absoluteUrl } from "@/lib/site";
 
 export const revalidate = 86400;
@@ -38,7 +38,7 @@ export async function generateMetadata({
       url,
       images,
       publishedTime: article.publishedAt,
-      modifiedTime: article.createdAt,
+      modifiedTime: article.updatedAt || article.createdAt,
       section: CATEGORIES[article.category].label,
       tags: article.tags,
     },
@@ -113,7 +113,7 @@ export default async function ArticlePage({
     description: article.summary,
     ...(article.imageUrl ? { image: [article.imageUrl] } : {}),
     datePublished: article.publishedAt,
-    dateModified: article.createdAt,
+    dateModified: article.updatedAt || article.createdAt,
     articleSection: CATEGORIES[article.category].label,
     keywords: article.tags.join(", "),
     inLanguage: "he",
@@ -168,6 +168,14 @@ export default async function ArticlePage({
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-y border-line py-2.5">
               <span className="text-sm text-ink-muted">
                 {formatDateHe(article.publishedAt)}
+                {article.updatedAt &&
+                  new Date(article.updatedAt).getTime() >
+                    new Date(article.publishedAt).getTime() + 60_000 && (
+                    <span className="mr-2 font-semibold text-brand">
+                      {" · עודכן "}
+                      {timeAgoHe(article.updatedAt)}
+                    </span>
+                  )}
               </span>
               <ShareLinks url={url} title={article.headline} />
             </div>

@@ -10,12 +10,19 @@ import { SOURCES } from "./sources";
 import { fetchAllSources } from "./rss";
 import { scrapeIsraeliSites } from "./scrape";
 import { selectCandidates, type ScoredItem } from "./relevance";
-import { generateArticles, type GenerationContext } from "./llm";
+import {
+  generateArticles,
+  expandArticle,
+  type GenerationContext,
+} from "./llm";
 import { enrichWithArticleText } from "./extract";
 import { findImage, findVideo } from "./media";
+import { getAvdijaStats } from "./stats";
 import { refreshBroadcasts } from "./broadcasts";
 import {
   mergeArticles,
+  updateArticle,
+  getArticleById,
   getArticles,
   getProcessedLinks,
   addProcessedLinks,
@@ -26,7 +33,12 @@ import {
   getQueue,
 } from "./store";
 import { hashId, slugify } from "./utils";
-import { topicSignature, isDuplicateTopic, type CoveredTopic } from "./dedup";
+import {
+  topicSignature,
+  isDuplicateTopic,
+  findDuplicateTopic,
+  type CoveredTopic,
+} from "./dedup";
 import { isFamilySafe } from "./safety";
 import { CATEGORIES } from "./categories";
 
@@ -34,13 +46,27 @@ import { CATEGORIES } from "./categories";
 const DEDUP_WINDOW_HOURS = Number(process.env.DEDUP_WINDOW_HOURS || 168);
 // תקציב טוקנים לכתבה בודדת (כולל "חשיבה" של ה-Flash). מספיק לכתבה מלאה.
 const ARTICLE_MAX_TOKENS = Number(process.env.ARTICLE_MAX_TOKENS || 8000);
+// גייט טריות קשיח: אחרי שאיבת תאריך הפרסום *האמיתי* של כל אשכול, נכתבים רק
+// אשכולות שהאירוע שלהם באמת מ-N השעות האחרונות (ברירת מחדל 24). אשכול שתאריכו
+// ישן יותר, או שלא ניתן לאמת את תאריכו - נזרק. זה מונע "חדשות ישנות" שמופיעות
+// ב-Google News אך אינן חדשות אמיתיות.
+const FRESH_WINDOW_HOURS = Number(process.env.FRESH_WINDOW_HOURS || 24);
+
+/** האם תאריך הפרסום ידוע ובתוך חלון הטריות (ברירת מחדל 24 שעות) */
+function isFreshEnough(publishedAt: string): boolean {
+  const t = new Date(publishedAt).getTime();
+  if (Number.isNaN(t)) return false; // תאריך לא ידוע = לא ניתן לאמת -> לא טרי
+  return t >= Date.now() - FRESH_WINDOW_HOURS * 36e5;
+}
 
 /** תוצאת שלב התכנון: שאיבה -> אשכול -> דה-דופ -> הכנסה לתור */
 export interface PlanResult {
   fetched: number;
   candidates: number; // אשכולות חדשים (אחרי סינון מול קישורים שעובדו)
-  enqueued: number; // נכנסו לתור בפועל
+  enqueued: number; // נכנסו לתור בפועל (כתבות חדשות + עדכוני-הרחבה)
   droppedDup: number; // נפסלו כפילות-נושא
+  droppedStale: number; // נפסלו - תאריכם אינו מ-24 השעות האחרונות (או לא נודע)
+  updates: number; // אשכולות שמיועדים להרחיב כתבה קיימת (סיפור מתפתח)
   queueSize: number; // גודל התור אחרי
   perCategory: Record<Category, number>;
   durationMs: number;
@@ -49,7 +75,8 @@ export interface PlanResult {
 /** תוצאת שלב הכתיבה: שליפת אשכול -> כתיבה -> שמירה */
 export interface WriteResult {
   popped: number;
-  written: number;
+  written: number; // כתבות חדשות שנכתבו
+  updated: number; // כתבות קיימות שהורחבו (סיפור מתפתח)
   skippedDup: number; // נושא שכוסה בין הכניסה לתור לכתיבה
   perCategory: Record<Category, number>;
   durationMs: number;
@@ -162,6 +189,8 @@ async function recentCoveredTopics(): Promise<CoveredTopic[]> {
       ),
       category: a.category,
       at: new Date(a.createdAt).getTime(),
+      articleId: a.id,
+      slug: a.slug,
     }));
 }
 
@@ -184,9 +213,17 @@ async function upcomingBroadcastList(): Promise<
     .slice(0, 60);
 }
 
-/** הקשר לכותב: קישורים פנימיים + לוח שידורים. דה-דופ נאכף בקוד, לא בפרומפט. */
-async function buildWriteContext(): Promise<GenerationContext> {
+/** הקשר לכותב: קישורים פנימיים + לוח שידורים + סטטיסטיקות. דה-דופ נאכף בקוד. */
+async function buildWriteContext(category: Category): Promise<GenerationContext> {
   const existing = await getArticles();
+  // סטטיסטיקות עונה אמיתיות לאבדיה - רק לכתבות בקטגוריית אבדיה, best-effort
+  // (מושבת בלי BALLDONTLIE_API_KEY). מזריקים מספרים מאומתים, לא ממציאים.
+  const playerStats =
+    category === "avdija"
+      ? [await getAvdijaStats().catch(() => null)].filter(
+          (s): s is NonNullable<typeof s> => s !== null,
+        )
+      : [];
   return {
     total: 1,
     alreadyCovered: [],
@@ -196,7 +233,33 @@ async function buildWriteContext(): Promise<GenerationContext> {
       category: a.category,
     })),
     upcomingBroadcasts: await upcomingBroadcastList(),
+    playerStats: playerStats.length > 0 ? playerStats : undefined,
   };
+}
+
+interface FoundMedia {
+  imageUrl?: string;
+  imageCredit?: { source: string; link: string };
+  videoId?: string;
+}
+
+/** איתור מדיה (תמונה + וידאו) לפי שאילתה, עם גיבוי לתמונת המקור. best-effort. */
+async function fetchMedia(query: string, fallbackImage?: string): Promise<FoundMedia> {
+  const q = query.trim();
+  const out: FoundMedia = {};
+  if (!q) {
+    if (fallbackImage) out.imageUrl = fallbackImage;
+    return out;
+  }
+  const [image, videoId] = await Promise.all([findImage(q), findVideo(q)]);
+  if (image) {
+    out.imageUrl = image.url;
+    out.imageCredit = { source: image.source, link: image.link };
+  } else if (fallbackImage) {
+    out.imageUrl = fallbackImage;
+  }
+  if (videoId) out.videoId = videoId;
+  return out;
 }
 
 /** המרת פלט הכותב לכתבה + העשרת מדיה (תמונה/וידאו), best-effort */
@@ -205,19 +268,55 @@ async function enrichArticleMedia(
   primary: RawItem,
 ): Promise<Article> {
   const base = toArticle(g, primary.publishedAt);
-  const query = (g.imageQuery || g.headline || "").trim();
-  const [image, videoId] = await Promise.all([
-    findImage(query),
-    findVideo(query),
-  ]);
-  if (image) {
-    base.imageUrl = image.url;
-    base.imageCredit = { source: image.source, link: image.link };
-  } else if (primary.image) {
-    base.imageUrl = primary.image; // גיבוי: תמונת המקור
-  }
-  if (videoId) base.videoId = videoId;
+  const media = await fetchMedia(g.imageQuery || g.headline || "", primary.image);
+  if (media.imageUrl) base.imageUrl = media.imageUrl;
+  if (media.imageCredit) base.imageCredit = media.imageCredit;
+  if (media.videoId) base.videoId = media.videoId;
   return base;
+}
+
+/**
+ * בונה את הגרסה המעודכנת של כתבה קיימת (סיפור מתפתח): שומר על הזהות היציבה
+ * (id, slug, createdAt) כדי שה-URL והקישורים לא יישברו, מאמץ את הגוף/הכותרת
+ * המעודכנים מהכותב, מסמן updatedAt=עכשיו, ודוחף את publishedAt לזמן ההתפתחות
+ * האחרונה כדי שהכתבה תרענן את מיקומה. שומר תמונה קיימת; משלים מדיה אם חסרה.
+ */
+async function buildUpdatedArticle(
+  existing: Article,
+  g: GeneratedArticle,
+  newPrimary: RawItem,
+): Promise<Article> {
+  const newTs = new Date(newPrimary.publishedAt).getTime();
+  const oldTs = new Date(existing.publishedAt).getTime();
+  const publishedAt =
+    !Number.isNaN(newTs) && newTs > (Number.isNaN(oldTs) ? 0 : oldTs)
+      ? new Date(newTs).toISOString()
+      : existing.publishedAt;
+
+  const updated: Article = {
+    ...existing,
+    subcategory: (g.subcategory || existing.subcategory || "").trim() || undefined,
+    headline: (g.headline || existing.headline).trim(),
+    subtitle: (g.subtitle || existing.subtitle || "").trim(),
+    summary: (g.summary || existing.summary || "").trim(),
+    body: (g.body || existing.body).trim(),
+    tags: Array.isArray(g.tags) && g.tags.length > 0 ? g.tags.slice(0, 6) : existing.tags,
+    importance:
+      typeof g.importance === "number"
+        ? Math.min(10, Math.max(1, Math.round(g.importance)))
+        : existing.importance,
+    publishedAt,
+    updatedAt: new Date().toISOString(),
+  };
+
+  // שומרים את התמונה/וידאו הקיימים; משלימים רק אם אין תמונה כלל.
+  if (!updated.imageUrl) {
+    const media = await fetchMedia(g.imageQuery || updated.headline, newPrimary.image);
+    if (media.imageUrl) updated.imageUrl = media.imageUrl;
+    if (media.imageCredit) updated.imageCredit = media.imageCredit;
+    if (!updated.videoId && media.videoId) updated.videoId = media.videoId;
+  }
+  return updated;
 }
 
 // ── שלב התכנון: שאיבה -> אשכול -> טקסט מלא -> דה-דופ -> תור ─────────
@@ -267,16 +366,39 @@ export async function planRefresh(): Promise<PlanResult> {
     console.log(`[plan] full text: ${enriched}/${enrichList.length} items`);
   }
 
+  // 2.3) גייט טריות קשיח: אחרי ששאבנו את תאריך הפרסום *האמיתי* של כל אשכול
+  //      (it.publishedAt עודכן ב-enrich), שומרים רק אשכולות שהאירוע שלהם באמת
+  //      מ-24 השעות האחרונות. אשכול ישן או שתאריכו לא נודע - נזרק (ולא ייכתב).
+  const fresh = groups.filter((it) => isFreshEnough(it.publishedAt));
+  const droppedStale = groups.length - fresh.length;
+  if (droppedStale > 0) {
+    console.log(`[plan] dropped stale (not last ${FRESH_WINDOW_HOURS}h): ${droppedStale}`);
+  }
+
   // 3) דה-דופ קשיח ברמת נושא: מול כתבות שכוסו (חלון) + מול אשכולות שכבר
   //    אושרו בריצה זו. זהו הפתרון לכתבות החוזרות - גייט בקוד, לא בפרומפט.
   const accepted: CoveredTopic[] = await recentCoveredTopics();
   const survivors: QueuedGroup[] = [];
   let droppedDup = 0;
+  let updates = 0;
+  // כתבות שכבר סומנו להרחבה בריצה זו - כדי לא להרחיב את אותה כתבה פעמיים.
+  const updatingIds = new Set<string>();
   const perCategory = emptyPerCat();
-  for (const it of groups) {
+  for (const it of fresh) {
     const grp = toQueuedGroup(it);
-    if (isDuplicateTopic(grp.sig, grp.category, accepted)) {
-      droppedDup++;
+    const match = findDuplicateTopic(grp.sig, grp.category, accepted);
+    if (match) {
+      // נושא שכבר כוסה. אם הוא מכסה כתבה קיימת *שפורסמה* (יש articleId) -
+      // זהו סיפור מתפתח: נרחיב את הכתבה הקיימת במקום לזרוק או לשכפל. אחרת
+      // (התאמה לאשכול אחר מאותה ריצה, או כבר מרחיבים את הכתבה) - כפילות, דלג.
+      if (match.articleId && !updatingIds.has(match.articleId)) {
+        grp.updateOf = match.articleId;
+        updatingIds.add(match.articleId);
+        survivors.push(grp);
+        updates++;
+      } else {
+        droppedDup++;
+      }
       continue;
     }
     accepted.push({ sig: grp.sig, category: grp.category, at: Date.now() });
@@ -298,6 +420,8 @@ export async function planRefresh(): Promise<PlanResult> {
     candidates: candidateCount,
     enqueued,
     droppedDup,
+    droppedStale,
+    updates,
     queueSize,
     perCategory,
     durationMs: Date.now() - startedAt,
@@ -309,6 +433,7 @@ export async function writeNext(max = 1): Promise<WriteResult> {
   const startedAt = Date.now();
   let popped = 0;
   let written = 0;
+  let updated = 0;
   let skippedDup = 0;
   const perCategory = emptyPerCat();
 
@@ -317,19 +442,51 @@ export async function writeNext(max = 1): Promise<WriteResult> {
     if (!group) break;
     popped++;
 
-    // דה-דופ חוזר בזמן הכתיבה: אולי פורסם נושא דומה מאז שהאשכול נכנס לתור.
+    // בניית "מועמד" יחיד מהאשכול (ראשי + מקורות-משנה) - משמש את שני המסלולים.
+    const item: ScoredItem = {
+      ...group.primary,
+      score: group.score,
+      related: group.related.map((r) => ({ ...r, score: 0 })),
+    };
+    const ctx = await buildWriteContext(group.category);
+
+    // ── מסלול הרחבה: סיפור מתפתח שמעדכן כתבה קיימת במקום לשכפל אותה ──
+    if (group.updateOf) {
+      const existing = await getArticleById(group.updateOf);
+      if (existing) {
+        let g2: GeneratedArticle | null = null;
+        try {
+          g2 = await expandArticle(existing, item, ctx, ARTICLE_MAX_TOKENS);
+        } catch (err) {
+          console.warn(`[write] expand failed: ${(err as Error).message}`);
+          continue;
+        }
+        if (!g2) continue;
+        if (
+          !isFamilySafe(
+            `${g2.headline} ${g2.subtitle || ""} ${g2.summary || ""} ${g2.body || ""}`,
+          )
+        ) {
+          console.warn(`[write] dropped unsafe update: ${g2.headline}`);
+          continue;
+        }
+        const updatedArticle = await buildUpdatedArticle(existing, g2, group.primary);
+        if (await updateArticle(updatedArticle)) {
+          updated++;
+          perCategory[group.category]++;
+        }
+        continue;
+      }
+      // הכתבה המקורית כבר אינה קיימת (נחתכה מהאחסון) - נכתוב כתבה חדשה במקום.
+    }
+
+    // דה-דופ חוזר (כתבה חדשה בלבד): אולי פורסם נושא דומה מאז שהאשכול נכנס לתור.
     const covered = await recentCoveredTopics();
     if (isDuplicateTopic(group.sig, group.category, covered)) {
       skippedDup++;
       continue;
     }
 
-    // בניית "מועמד" יחיד מהאשכול (ראשי + מקורות-משנה) ובקשת כתבה אחת.
-    const item: ScoredItem = {
-      ...group.primary,
-      score: group.score,
-      related: group.related.map((r) => ({ ...r, score: 0 })),
-    };
     const candidates: Record<Category, ScoredItem[]> = {
       avdija: [],
       israeli_basketball: [],
@@ -338,7 +495,6 @@ export async function writeNext(max = 1): Promise<WriteResult> {
     candidates[group.category] = [item];
     const tg = emptyPerCat();
     tg[group.category] = 1;
-    const ctx = await buildWriteContext();
 
     let gen: LlmOutput | null = null;
     try {
@@ -380,6 +536,7 @@ export async function writeNext(max = 1): Promise<WriteResult> {
   return {
     popped,
     written,
+    updated,
     skippedDup,
     perCategory,
     durationMs: Date.now() - startedAt,

@@ -165,16 +165,20 @@ function fromAnchors(html: string, site: HtmlSite): RawItem[] {
       source: site.name,
       lang: "he",
       category,
-      publishedAt: new Date().toISOString(), // עמוד הבית = עכשווי
+      // אין תאריך בעמוד הבית. לא מדביקים "עכשיו" (זו הסיבה לחדשות ישנות שנראות
+      // טריות) - משאירים ריק; אימות-הטריות במורד הזרם ישלוף את תאריך הפרסום
+      // האמיתי מהכתבה עצמה ויסנן אם אינה מ-24 השעות האחרונות.
+      publishedAt: "",
     });
   }
   return items;
 }
 
+// תאריך לא ידוע -> מחרוזת ריקה (לא "עכשיו"). ראה ההסבר ב-rss.ts.
 function toIso(value: unknown): string {
-  if (!value) return new Date().toISOString();
+  if (!value) return "";
   const t = new Date(String(value)).getTime();
-  return Number.isNaN(t) ? new Date().toISOString() : new Date(t).toISOString();
+  return Number.isNaN(t) ? "" : new Date(t).toISOString();
 }
 
 async function scrapeSite(site: HtmlSite): Promise<RawItem[]> {

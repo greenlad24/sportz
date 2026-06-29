@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getArticles, getUpdates, getQueue, storageMode } from "@/lib/store";
 import { mediaConfig } from "@/lib/media";
+import { statsConfig } from "@/lib/stats";
 import { getRunState } from "@/lib/runState";
 
 // בריאות המערכת: מצב הריצה האחרון, ספירת כתבות, וקונפיג המדיה.
@@ -56,6 +57,7 @@ export async function GET(req: NextRequest) {
     media: {
       imagesEnabled: mediaConfig.imagesEnabled,
       videoEnabled: mediaConfig.videoEnabled,
+      statsEnabled: statsConfig.enabled,
     },
   });
 }

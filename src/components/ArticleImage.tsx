@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { CATEGORIES } from "@/lib/categories";
 import type { Category } from "@/lib/types";
 
@@ -8,8 +11,9 @@ const GRADIENTS: Record<Category, string> = {
 };
 
 /**
- * תמונת כותרת. מכיוון שלא תמיד יש תמונה אמינה מהמקור, ברירת המחדל היא
- * רקע מדורג נקי עם תווית הקטגוריה - מראה אחיד ומקצועי ללא תלות במקורות.
+ * תמונת כותרת. כשאין תמונה - או כשהתמונה החיצונית נכשלת בטעינה (קישור שבור,
+ * חסימת hotlink/403, או תמונה שפגה) - מציגים רקע מדורג נקי עם תווית הקטגוריה
+ * במקום אייקון "תמונה שבורה". כך כתבה לעולם לא נראית פגומה.
  */
 export function ArticleImage({
   category,
@@ -22,13 +26,16 @@ export function ArticleImage({
   alt?: string;
   className?: string;
 }) {
-  if (src) {
+  const [failed, setFailed] = useState(false);
+
+  if (src && !failed) {
     // eslint-disable-next-line @next/next/no-img-element
     return (
       <img
         src={src}
         alt={alt}
         loading="lazy"
+        onError={() => setFailed(true)}
         className={`object-cover ${className}`}
       />
     );

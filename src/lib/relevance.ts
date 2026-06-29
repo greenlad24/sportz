@@ -128,9 +128,13 @@ export function scoreItem(item: RawItem): number {
   const kw = keywordScore(item);
   // בונוס למקורות חזקים/ייעודיים
   const weight = sourceWeight(item.source);
-  // בונוס לטריות (עד 5 נקודות, יורד עם הזמן)
-  const ageHours = (Date.now() - new Date(item.publishedAt).getTime()) / 36e5;
-  const freshness = Math.max(0, 5 - ageHours / 6);
+  // בונוס לטריות (עד 5 נקודות, יורד עם הזמן). תאריך לא ידוע -> 0 (לא בונוס ולא
+  // עונש; הטריות האמיתית תיבדק במורד הזרם אחרי שאיבת תאריך הפרסום מהכתבה).
+  const ts = new Date(item.publishedAt).getTime();
+  const ageHours = Number.isNaN(ts) ? Infinity : (Date.now() - ts) / 36e5;
+  const freshness = Number.isFinite(ageHours)
+    ? Math.max(0, 5 - ageHours / 6)
+    : 0;
   // כותרת ארוכה מדי / קצרה מדי -> פחות אמין
   const titleOk = item.title.length >= 15 ? 1 : 0;
   return kw + weight * 0.4 + freshness + titleOk;
@@ -147,7 +151,14 @@ export function selectCandidates(
   const cutoff = Date.now() - opts.lookbackHours * 36e5;
 
   const scored: ScoredItem[] = items
-    .filter((it) => new Date(it.publishedAt).getTime() >= cutoff)
+    // טריות: שומרים פריטים מ-24/48 השעות האחרונות *וגם* פריטים חסרי-תאריך
+    // (עמוד-בית שנשאב / RSS בלי pubDate). אלה יעברו שאיבת-תאריך והגייט הקשיח
+    // במורד הזרם - שם הם יסוננו אם תאריכם האמיתי אינו מ-24 השעות. אסור לסנן
+    // אותם כאן, אחרת לעולם לא תהיה הזדמנות לשלוף את תאריכם האמיתי.
+    .filter((it) => {
+      const ts = new Date(it.publishedAt).getTime();
+      return Number.isNaN(ts) || ts >= cutoff;
+    })
     // שער "נקי מפוליטיקה": חוסם פריטים פוליטיים לפני ניקוד/שליחה ל-LLM.
     .filter((it) => !isPolitical(`${it.title} ${it.summary}`))
     // שער רלוונטיות לפי מילות-מפתח: פיד NBA רחב חייב להזכיר אבדיה/בלייזרס

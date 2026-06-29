@@ -132,10 +132,13 @@ async function fetchSource(source: Source): Promise<RawItem[]> {
   }
 }
 
+// תאריך לא ידוע -> מחרוזת ריקה (לא "עכשיו"!). הדבקת זמן ההווה לפריט חסר-תאריך
+// היא הסיבה המרכזית ל"חדשות ישנות שנראות טריות". פריט בלי תאריך תקין יעבור
+// אימות-טריות במורד הזרם (לפי תאריך הכתבה האמיתי) ויסונן אם איננו מ-24 השעות.
 function toIso(value: unknown): string {
-  if (!value) return new Date().toISOString();
+  if (!value) return "";
   const t = new Date(String(value)).getTime();
-  return Number.isNaN(t) ? new Date().toISOString() : new Date(t).toISOString();
+  return Number.isNaN(t) ? "" : new Date(t).toISOString();
 }
 
 /** שאיבת כל המקורות במקביל */

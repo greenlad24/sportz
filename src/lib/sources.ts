@@ -30,8 +30,13 @@ function googleNews(query: string, lang: "he" | "en"): string {
     lang === "he"
       ? "hl=he&gl=IL&ceid=IL:he"
       : "hl=en-US&gl=US&ceid=US:en";
+  // שער טריות במקור: כל חיפוש מוגבל ל-24 השעות האחרונות (when:1d) אלא אם כבר
+  // צוין מפורשות. זה מצמצם דרמטית "חדשות ישנות" שגוגל ניוז מציף (כתבות שמופיעות
+  // בפיד אך פורסמו לפני ימים). הגייט הקשיח של 24 שעות נאכף שוב במורד הזרם על
+  // תאריך הפרסום *האמיתי* של הכתבה (אחרי פתרון הקישור).
+  const q = /\bwhen:/.test(query) ? query : `${query} when:1d`;
   return `https://news.google.com/rss/search?q=${encodeURIComponent(
-    query,
+    q,
   )}&${params}`;
 }
 

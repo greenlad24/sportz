@@ -21,20 +21,37 @@ or on Vercel (Upstash Redis storage).
    primary + related. **Resolves Google News redirect links** to the publisher
    URL first (base64 decode → redirect-follow), so full text is actually
    fetched (~half of items in practice).
-5. **Hard topic dedup** — `dedup.ts`: each group gets a `topicSignature`;
-   groups matching any article from the last `DEDUP_WINDOW_HOURS` (default 7d)
-   OR another accepted group are **dropped, never written**. This is a code
-   gate, not a prompt hint — the fix for repeated articles.
-6. **Enqueue** — survivors go to a persistent `queue.json` (`store.ts`).
+5. **Hard freshness gate** — after enrichment, `extract.ts` also pulls each
+   item's **real publish date** (JSON-LD `datePublished` / meta tags). A group
+   is kept only if that date is within `FRESH_WINDOW_HOURS` (default 24). Items
+   with an unknown/unverifiable date are **dropped** — this is the fix for "old
+   news that shows up on Google News but isn't really news." Missing RSS/scrape
+   dates are no longer stamped `now` (they become `""` → fail the gate unless a
+   real date is recovered).
+6. **Topic dedup → grow, not just drop** — `dedup.ts`: each group gets a
+   `topicSignature`. If it matches an **existing published article**
+   (`findDuplicateTopic` returns its id), the group is enqueued as an
+   **update** (`QueuedGroup.updateOf`) that will *grow* that article instead of
+   being dropped or duplicated. If it only matches another group accepted in the
+   same run, it's dropped. Code gate, not a prompt hint.
+7. **Enqueue** — survivors (new + update groups) go to `queue.json` (`store.ts`).
 
 **Phase 2 — `writeNext()` (every ~2 min, `/api/write`):**
 1. **Pop one group** (highest score) from the queue.
-2. **Re-check dedup** (something may have published since enqueue).
-3. **Write** — `llm.ts generateArticles()` writes **one** article from the
-   whole group (multi-source synthesis) + updates, as JSON. The
-   **dictionary** (`src/lib/dictionary.ts`) is baked into the prompt to enforce
-   correct Hebrew — there is **no second proofread pass** anymore.
+2. **Update path** — if the group has `updateOf` (a developing story), load that
+   article and call `llm.expandArticle()` to **merge the new facts into it and
+   grow it**; `store.updateArticle()` saves it in place (same id/slug, bumps
+   `publishedAt` to the latest development, sets `updatedAt`). UI shows an
+   "עודכן" label. If the original was trimmed away, falls back to a new write.
+3. **New article path** — re-check dedup, then `llm.generateArticles()` writes
+   **one** article from the whole group (multi-source synthesis) + updates, as
+   JSON. For **avdija** groups, real verified season stats from `stats.ts`
+   (balldontlie) are injected so the model can add numbers without fabricating.
+   The **dictionary** (`src/lib/dictionary.ts`) enforces correct Hebrew — no
+   second proofread pass.
 4. **Enrich media** (`media.ts`: Brave image + YouTube video, best-effort).
+   Broken/expired image URLs fall back to a gradient placeholder client-side
+   (`ArticleImage`/`TileImage` `onError`).
 5. **Store** — `store.mergeArticles()` dedupes by id/sourceUrl and persists.
 
 Result: a continuous trickle (one article every ~2 min), each synthesized from
@@ -72,6 +89,9 @@ real news — the model must not fabricate filler.
   `ANTHROPIC_API_KEY`/`CLAUDE_MODEL` (paid).
 - `CRON_SECRET` — guards `/api/plan`, `/api/write`, `/api/refresh`, `/api/status`.
 - `BRAVE_API_KEY` — article images. `YOUTUBE_API_KEY` — article videos.
+- `BALLDONTLIE_API_KEY` — free NBA stats for Avdija articles (disabled if unset);
+  `NBA_SEASON` (2025 = 2025-26), `STATS_TTL_HOURS` (6).
+- `FRESH_WINDOW_HOURS` (24) — hard freshness gate on the real publish date.
 - `ARTICLES_PER_RUN` (10), `LOOKBACK_HOURS` (24), `ARTICLE_MAX_TOKENS` (8000).
 - `PLAN_INTERVAL_MS` (900000), `WRITE_INTERVAL_MS` (120000), `QUEUE_TTL_HOURS` (6).
 - `DEDUP_WINDOW_HOURS` (168), `DEDUP_SIMILARITY` (0.5) — topic-dedup tuning.

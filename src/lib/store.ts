@@ -121,6 +121,29 @@ export async function mergeArticles(fresh: Article[]): Promise<Article[]> {
   return additions;
 }
 
+/**
+ * מעדכן כתבה קיימת *במקום* (לפי id) - לסיפור מתפתח שגדל. שומר על אותו id/slug
+ * כדי שה-URL והקישורים הפנימיים יישארו תקפים. אם הכתבה כבר אינה קיימת (נחתכה),
+ * מחזיר false והקורא ייצור כתבה חדשה במקום. קריאה/כתיבה טרייה.
+ */
+export async function updateArticle(updated: Article): Promise<boolean> {
+  const existing = (await getArticlesRaw(true)) ?? [];
+  const idx = existing.findIndex((a) => a.id === updated.id);
+  if (idx === -1) return false;
+  existing[idx] = updated;
+  const merged = [...existing].sort(
+    (a, b) =>
+      new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
+  );
+  await saveArticles(merged);
+  return true;
+}
+
+export async function getArticleById(id: string): Promise<Article | undefined> {
+  const all = (await getArticlesRaw(true)) ?? [];
+  return all.find((a) => a.id === id);
+}
+
 export async function getArticleBySlug(
   slug: string,
 ): Promise<Article | undefined> {

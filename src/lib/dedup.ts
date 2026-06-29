@@ -58,6 +58,8 @@ export interface CoveredTopic {
   sig: string;
   category: Category;
   at: number; // ms - מתי כוסה (לחלון זמן)
+  articleId?: string; // הכתבה הקיימת שמכסה את הנושא (להרחבה כשהסיפור מתפתח)
+  slug?: string;
 }
 
 const DEFAULT_THRESHOLD = Number(process.env.DEDUP_SIMILARITY || 0.38);
@@ -90,12 +92,31 @@ export function isDuplicateTopic(
   covered: CoveredTopic[],
   threshold = DEFAULT_THRESHOLD,
 ): boolean {
-  if (!sig) return false;
+  return findDuplicateTopic(sig, category, covered, threshold) !== null;
+}
+
+/**
+ * כמו isDuplicateTopic, אך מחזיר את הנושא שכוסה שתואם (או null). משמש כדי לדעת
+ * *איזו* כתבה קיימת מכסה את הנושא - כך אפשר להרחיב אותה כשהסיפור מתפתח, במקום
+ * לזרוק את הפריט החדש או ליצור כפילות. בוחר את ההתאמה הטובה ביותר (חפיפה גבוהה).
+ */
+export function findDuplicateTopic(
+  sig: string,
+  category: Category,
+  covered: CoveredTopic[],
+  threshold = DEFAULT_THRESHOLD,
+): CoveredTopic | null {
+  if (!sig) return null;
+  let best: CoveredTopic | null = null;
+  let bestShared = 0;
   for (const c of covered) {
     if (c.category !== category) continue;
     const { coef, shared } = overlap(sig, c.sig);
-    if (shared >= SHARED_TOKENS_DUP) return true;
-    if (coef >= threshold && shared >= 3) return true;
+    const isDup = shared >= SHARED_TOKENS_DUP || (coef >= threshold && shared >= 3);
+    if (isDup && shared > bestShared) {
+      best = c;
+      bestShared = shared;
+    }
   }
-  return false;
+  return best;
 }

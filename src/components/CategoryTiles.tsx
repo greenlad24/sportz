@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getArticles } from "@/lib/store";
 import { CATEGORY_ORDER, CATEGORIES } from "@/lib/categories";
+import { TileImage } from "./TileImage";
 
 const FALLBACK: Record<string, string> = {
   avdija: "from-brand to-[#6e2018]",
@@ -25,13 +26,7 @@ export async function CategoryTiles() {
             className="relative block h-[90px] overflow-hidden rounded-lg"
           >
             {img ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={img}
-                alt=""
-                loading="lazy"
-                className="h-full w-full object-cover"
-              />
+              <TileImage src={img} gradient={FALLBACK[cat]} />
             ) : (
               <div
                 className={`h-full w-full bg-gradient-to-br ${FALLBACK[cat]}`}
