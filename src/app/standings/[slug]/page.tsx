@@ -3,10 +3,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getArticles } from "@/lib/store";
 import { categoryBySlug } from "@/lib/categories";
-import { getCategoryStandings } from "@/lib/standings";
+import { getCategoryStandings, getCategoryResults } from "@/lib/standings";
 import { isTransaction } from "@/lib/relevance";
 import { isFamilySafe } from "@/lib/safety";
 import { StandingsTable } from "@/components/StandingsTable";
+import { ResultsList } from "@/components/ResultsList";
 import { TradesList } from "@/components/TradesList";
 import { SITE } from "@/lib/site";
 
@@ -40,8 +41,11 @@ export default async function StandingsPage({
   const c = categoryBySlug(params.slug);
   if (!c) notFound();
 
-  // עדכון עצל + שמירה: נשאב מ-ESPN רק אם השמור ישן, אחרת מהאחסון.
-  const standings = await getCategoryStandings(c.category);
+  // עדכון עצל + שמירה: נשאב רק אם השמור ישן, אחרת מהאחסון.
+  const [standings, results] = await Promise.all([
+    getCategoryStandings(c.category),
+    getCategoryResults(c.category),
+  ]);
 
   // מעברים/חתימות אחרונים בקטגוריה -> כרטיסים עם תמונת השחקן וקישור לברייקינג.
   const cutoff = Date.now() - TRADES_WINDOW_DAYS * 864e5;
@@ -93,6 +97,21 @@ export default async function StandingsPage({
               {standings.map((s) => (
                 <StandingsTable key={s.leagueKey} data={s} barClass={c.bar} />
               ))}
+            </div>
+          )}
+
+          {/* תוצאות משחקים אחרונות - ממספר מקורות (ESPN + balldontlie ל-NBA) */}
+          {results.length > 0 && (
+            <div className="mt-6">
+              <div className="mb-3 flex items-center gap-2 border-b border-line pb-1.5">
+                <span className={`h-4 w-1 rounded ${c.bar}`} />
+                <h2 className="text-base font-extrabold text-ink">תוצאות משחקים</h2>
+              </div>
+              <div className="space-y-4">
+                {results.map((r) => (
+                  <ResultsList key={r.leagueKey} data={r} />
+                ))}
+              </div>
             </div>
           )}
         </div>

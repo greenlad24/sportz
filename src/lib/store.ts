@@ -16,6 +16,7 @@ const KEY_COMMENTS = "sportz:comments";
 const KEY_BROADCASTS = "sportz:broadcasts";
 const KEY_QUEUE = "sportz:queue";
 const KEY_STANDINGS = "sportz:standings";
+const KEY_RESULTS = "sportz:results";
 const MAX_ARTICLES = 200;
 const MAX_LINKS = 4000;
 const MAX_UPDATES = 80;
@@ -269,9 +270,10 @@ export async function addComment(comment: Comment): Promise<void> {
 // העדכון "עצל": כשנכנסים לעמוד הטבלאות, אם הנתון ישן מ-TTL הוא נשאב מחדש
 // ונשמר; אחרת מוחזר הנתון השמור. אין רענון רקע - רק בכניסה לעמוד (לפי הבקשה).
 
-import type { LeagueStandings } from "./standings";
+import type { LeagueStandings, LeagueResults } from "./standings";
 
 type StandingsMap = Record<string, LeagueStandings>;
+type ResultsMap = Record<string, LeagueResults>;
 
 /** כל הטבלאות השמורות (לפי מפתח ליגה). */
 export async function getStandingsStore(): Promise<StandingsMap> {
@@ -288,6 +290,23 @@ export async function saveStanding(
   const map = await getStandingsStore();
   map[key] = value;
   await backendSet(KEY_STANDINGS, "standings.json", map);
+}
+
+/** כל תוצאות המשחקים השמורות (לפי מפתח ליגה). */
+export async function getResultsStore(): Promise<ResultsMap> {
+  return (
+    (await backendGet<ResultsMap>(KEY_RESULTS, "results.json", true)) ?? {}
+  );
+}
+
+/** שומר/מעדכן תוצאות ליגה אחת (לפי מפתח ליגה). */
+export async function saveResults(
+  key: string,
+  value: LeagueResults,
+): Promise<void> {
+  const map = await getResultsStore();
+  map[key] = value;
+  await backendSet(KEY_RESULTS, "results.json", map);
 }
 
 // ── לוח שידורים (נשאב מערוץ הספורט, מרוענן מעת לעת) ────────────────

@@ -3,7 +3,12 @@
 // מקור הנתונים: site.api.espn.com - כולל לוגו לכל קבוצה.
 
 import type { Category } from "./types";
-import { getStandingsStore, saveStanding } from "./store";
+import {
+  getStandingsStore,
+  saveStanding,
+  getResultsStore,
+  saveResults,
+} from "./store";
 
 export type Sport = "basketball" | "football";
 
@@ -230,4 +235,176 @@ export async function getCategoryStandings(
   const keys = CATEGORY_LEAGUES[category] ?? [];
   const all = await Promise.all(keys.map((k) => getStandings(k)));
   return all.filter((s): s is LeagueStandings => s !== null);
+}
+
+// ── תוצאות משחקים (ממספר מקורות: ESPN + balldontlie ל-NBA) ─────────
+
+export interface GameResult {
+  date: string; // ISO
+  homeName: string;
+  homeAbbr: string;
+  homeLogo?: string;
+  homeScore?: number;
+  awayName: string;
+  awayAbbr: string;
+  awayLogo?: string;
+  awayScore?: number;
+  status: string; // "סיום" / "חי" / זמן
+  source: string; // מאיזה מקור הגיע (ESPN / balldontlie)
+}
+
+export interface LeagueResults {
+  leagueKey: string;
+  leagueLabel: string;
+  sport: Sport;
+  fetchedAt: string;
+  games: GameResult[];
+}
+
+const RESULTS_TTL_MS =
+  Number(process.env.RESULTS_TTL_MINUTES || 20) * 60_000;
+const BALLDONTLIE_KEY = process.env.BALLDONTLIE_API_KEY;
+
+interface EspnEvent {
+  date?: string;
+  status?: { type?: { completed?: boolean; description?: string; shortDetail?: string } };
+  competitions?: {
+    competitors?: {
+      homeAway?: string;
+      score?: string;
+      team?: EspnTeam;
+    }[];
+  }[];
+}
+
+/** תוצאות מ-ESPN scoreboard (כל המשחקים האחרונים/הנוכחיים של הליגה). */
+async function fetchEspnResults(def: LeagueDef): Promise<GameResult[]> {
+  try {
+    const res = await fetch(
+      `https://site.api.espn.com/apis/site/v2/sports/${def.espnPath}/scoreboard`,
+      { headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(10000) },
+    );
+    if (!res.ok) return [];
+    const data = (await res.json()) as { events?: EspnEvent[] };
+    const games: GameResult[] = [];
+    for (const ev of data.events ?? []) {
+      const comp = ev.competitions?.[0];
+      const cs = comp?.competitors ?? [];
+      const home = cs.find((c) => c.homeAway === "home") ?? cs[0];
+      const away = cs.find((c) => c.homeAway === "away") ?? cs[1];
+      if (!home || !away) continue;
+      games.push({
+        date: ev.date || "",
+        homeName: home.team?.displayName || "",
+        homeAbbr: home.team?.abbreviation || "",
+        homeLogo: logoOf(home.team),
+        homeScore: home.score !== undefined ? Number(home.score) : undefined,
+        awayName: away.team?.displayName || "",
+        awayAbbr: away.team?.abbreviation || "",
+        awayLogo: logoOf(away.team),
+        awayScore: away.score !== undefined ? Number(away.score) : undefined,
+        status: ev.status?.type?.shortDetail || ev.status?.type?.description || "",
+        source: "ESPN",
+      });
+    }
+    return games;
+  } catch {
+    return [];
+  }
+}
+
+interface BdlGame {
+  date?: string;
+  status?: string;
+  home_team?: { full_name?: string; abbreviation?: string };
+  visitor_team?: { full_name?: string; abbreviation?: string };
+  home_team_score?: number;
+  visitor_team_score?: number;
+}
+
+/** תוצאות NBA אחרונות מ-balldontlie (מקור שני להצלבה/השלמה). */
+async function fetchBalldontlieResults(): Promise<GameResult[]> {
+  if (!BALLDONTLIE_KEY) return [];
+  try {
+    const res = await fetch(
+      "https://api.balldontlie.io/v1/games?per_page=100&seasons[]=2024",
+      { headers: { Authorization: BALLDONTLIE_KEY }, signal: AbortSignal.timeout(10000) },
+    );
+    if (!res.ok) return [];
+    const data = (await res.json()) as { data?: BdlGame[] };
+    const finals = (data.data ?? []).filter((g) => (g.status || "").includes("Final"));
+    finals.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    return finals.slice(0, 8).map((g) => ({
+      date: g.date || "",
+      homeName: g.home_team?.full_name || "",
+      homeAbbr: g.home_team?.abbreviation || "",
+      homeScore: g.home_team_score,
+      awayName: g.visitor_team?.full_name || "",
+      awayAbbr: g.visitor_team?.abbreviation || "",
+      awayScore: g.visitor_team_score,
+      status: "סיום",
+      source: "balldontlie",
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function dedupeGames(games: GameResult[]): GameResult[] {
+  const seen = new Set<string>();
+  const out: GameResult[] = [];
+  for (const g of games) {
+    const day = (g.date || "").slice(0, 10);
+    const teams = [g.homeAbbr, g.awayAbbr].sort().join("-");
+    const k = `${day}|${teams}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(g);
+  }
+  return out;
+}
+
+async function fetchResults(def: LeagueDef): Promise<LeagueResults | null> {
+  // מקור ראשי: ESPN. ל-NBA מוסיפים מקור שני (balldontlie) ומצליבים.
+  const sources = [fetchEspnResults(def)];
+  if (def.key === "nba") sources.push(fetchBalldontlieResults());
+  const all = (await Promise.all(sources)).flat();
+  const games = dedupeGames(all)
+    .filter((g) => g.homeName && g.awayName)
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+    .slice(0, 10);
+  if (games.length === 0) return null;
+  return {
+    leagueKey: def.key,
+    leagueLabel: def.label,
+    sport: def.sport,
+    fetchedAt: new Date().toISOString(),
+    games,
+  };
+}
+
+/** תוצאות ליגה - עדכון עצל בכניסה לעמוד (TTL), נשמר. ראה getStandings. */
+export async function getResults(key: string): Promise<LeagueResults | null> {
+  const def = LEAGUES[key];
+  if (!def) return null;
+  const store = await getResultsStore();
+  const cached = store[key];
+  const fresh =
+    cached && Date.now() - new Date(cached.fetchedAt).getTime() < RESULTS_TTL_MS;
+  if (fresh) return cached;
+  const fetched = await fetchResults(def);
+  if (fetched) {
+    await saveResults(key, fetched);
+    return fetched;
+  }
+  return cached ?? null;
+}
+
+/** כל תוצאות הליגות של קטגוריה (עדכון עצל). best-effort. */
+export async function getCategoryResults(
+  category: Category,
+): Promise<LeagueResults[]> {
+  const keys = CATEGORY_LEAGUES[category] ?? [];
+  const all = await Promise.all(keys.map((k) => getResults(k)));
+  return all.filter((r): r is LeagueResults => r !== null);
 }
