@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { LEAGUES, getResults } from "@/lib/standings";
+import { teamHe, statusHe } from "@/lib/teams-he";
 
 // רצועת "תוצאות חיות" בכותרת: משחקים חיים + תוצאות סיום אחרונות מכל הליגות.
 // עדכון עצל דרך getResults (TTL) - כך הרצועה מרעננת גם את results.json בדרך.
@@ -52,7 +53,7 @@ export async function GET() {
       let status: string;
       if (g.live) {
         tier = 2;
-        status = g.status || "חי";
+        status = statusHe(g.status) || "חי";
       } else if (g.completed && recent) {
         tier = 0;
         status = "סיום";
@@ -65,8 +66,8 @@ export async function GET() {
 
       rows.push({
         league: r.leagueLabel,
-        home: g.homeAbbr || g.homeName,
-        away: g.awayAbbr || g.awayName,
+        home: teamHe(g.homeName, g.homeAbbr),
+        away: teamHe(g.awayName, g.awayAbbr),
         // משחק עתידי: בלי תוצאה (מציגים שעת פתיחה במקום).
         hs: tier === 1 ? "" : g.homeScore !== undefined ? String(g.homeScore) : "",
         as: tier === 1 ? "" : g.awayScore !== undefined ? String(g.awayScore) : "",
