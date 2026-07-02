@@ -38,6 +38,34 @@ export function rankArticles(articles: Article[]): Article[] {
   });
 }
 
+// חלון "סיפור השעה": האשכול העדכני של החדשות סביב הכתבה החדשה ביותר (בדקות).
+const TOP_STORY_WINDOW_MIN = Number(process.env.TOP_STORY_WINDOW_MINUTES || 90);
+// הפרש חשיבות שנחשב "שקול": בטווח העליון הזה, ההתפתחות החדשה מנצחת את הישנה.
+const TOP_STORY_TIER = Number(process.env.TOP_STORY_IMPORTANCE_TIER || 1);
+
+/**
+ * "סיפור השעה" לכותרת הראשית. שלא כמו rankArticles (שמקבץ לפי דלי-שעה מוחלט
+ * ולכן רגיש לגבול השעה), כאן:
+ *   1. מגדירים את האשכול העדכני - כתבות שפורסמו בטווח TOP_STORY_WINDOW_MIN
+ *      מהכתבה החדשה ביותר (יחסי לחדשות עצמן, עובד גם כשכל האתר בן כמה שעות).
+ *   2. מבין הסיפורים ה*חזקים* באשכול (חשיבות בטווח TOP_STORY_TIER מהמקסימום)
+ *      בוחרים את ה*עדכני ביותר* - כך עסקה שנחתמה מנצחת שמועה מוקדמת על אותו
+ *      נושא, וכתבה טרייה זניחה לא עוקפת סיפור ענק.
+ */
+export function pickTopStory(articles: Article[]): Article | undefined {
+  if (articles.length === 0) return undefined;
+  const newest = Math.max(...articles.map((a) => timeOf(a.publishedAt)));
+  const windowMs = TOP_STORY_WINDOW_MIN * 60_000;
+  const recent = articles.filter(
+    (a) => newest - timeOf(a.publishedAt) <= windowMs,
+  );
+  const pool = recent.length > 0 ? recent : articles;
+  const topWeight = Math.max(...pool.map(weight));
+  return [...pool]
+    .filter((a) => weight(a) >= topWeight - TOP_STORY_TIER)
+    .sort((a, b) => timeOf(b.publishedAt) - timeOf(a.publishedAt))[0];
+}
+
 /**
  * סינון טריות: רק כתבות מ-N השעות האחרונות (לפי publishedAt). אם לא נשארה
  * אף כתבה טרייה (שעה שקטה במיוחד) - מחזירים את החדשות ביותר כדי לא להציג עמוד ריק.

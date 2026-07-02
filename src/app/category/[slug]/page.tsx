@@ -4,7 +4,7 @@ import Link from "next/link";
 import { getArticles } from "@/lib/store";
 import { categoryBySlug } from "@/lib/categories";
 import { ArticleCard } from "@/components/ArticleCard";
-import { rankArticles, visibleArticles } from "@/lib/ranking";
+import { rankArticles, pickTopStory, visibleArticles } from "@/lib/ranking";
 import { SITE } from "@/lib/site";
 
 // דינמי: מרונדר מהאחסון החי בכל בקשה, כך שכתבות חדשות מופיעות מיד.
@@ -41,9 +41,14 @@ export default async function CategoryPage({
 
   const all = await getArticles();
   // טריות (24ש') + ידידותי-למשפחה + דירוג לפי שעה ואז חשיבות - לא לפי סדר כניסה.
-  const items = rankArticles(
-    visibleArticles(all).filter((a) => a.category === c.category),
+  const catArticles = visibleArticles(all).filter(
+    (a) => a.category === c.category,
   );
+  // הכרטיס המוביל = "סיפור השעה" (ההתפתחות העדכנית החזקה ביותר), אחריו השאר.
+  const lead = pickTopStory(catArticles);
+  const items = lead
+    ? [lead, ...rankArticles(catArticles).filter((a) => a.id !== lead.id)]
+    : rankArticles(catArticles);
 
   return (
     <div className="mx-auto max-w-site px-4 py-6">

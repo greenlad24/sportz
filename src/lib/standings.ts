@@ -250,6 +250,8 @@ export interface GameResult {
   awayLogo?: string;
   awayScore?: number;
   status: string; // "סיום" / "חי" / זמן
+  live?: boolean; // משחק שמתנהל כרגע (state === "in")
+  completed?: boolean; // משחק שהסתיים
   source: string; // מאיזה מקור הגיע (ESPN / balldontlie)
 }
 
@@ -267,7 +269,14 @@ const BALLDONTLIE_KEY = process.env.BALLDONTLIE_API_KEY;
 
 interface EspnEvent {
   date?: string;
-  status?: { type?: { completed?: boolean; description?: string; shortDetail?: string } };
+  status?: {
+    type?: {
+      state?: string; // "pre" | "in" | "post"
+      completed?: boolean;
+      description?: string;
+      shortDetail?: string;
+    };
+  };
   competitions?: {
     competitors?: {
       homeAway?: string;
@@ -293,6 +302,9 @@ async function fetchEspnResults(def: LeagueDef): Promise<GameResult[]> {
       const home = cs.find((c) => c.homeAway === "home") ?? cs[0];
       const away = cs.find((c) => c.homeAway === "away") ?? cs[1];
       if (!home || !away) continue;
+      const st = ev.status?.type;
+      const live = st?.state === "in";
+      const completed = st?.completed ?? st?.state === "post";
       games.push({
         date: ev.date || "",
         homeName: home.team?.displayName || "",
@@ -303,7 +315,9 @@ async function fetchEspnResults(def: LeagueDef): Promise<GameResult[]> {
         awayAbbr: away.team?.abbreviation || "",
         awayLogo: logoOf(away.team),
         awayScore: away.score !== undefined ? Number(away.score) : undefined,
-        status: ev.status?.type?.shortDetail || ev.status?.type?.description || "",
+        status: st?.shortDetail || st?.description || "",
+        live,
+        completed,
         source: "ESPN",
       });
     }
@@ -343,6 +357,7 @@ async function fetchBalldontlieResults(): Promise<GameResult[]> {
       awayAbbr: g.visitor_team?.abbreviation || "",
       awayScore: g.visitor_team_score,
       status: "סיום",
+      completed: true,
       source: "balldontlie",
     }));
   } catch {

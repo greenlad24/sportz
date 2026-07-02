@@ -6,7 +6,19 @@ import { ArticleRow } from "@/components/ArticleRow";
 import { HourlyUpdates } from "@/components/HourlyUpdates";
 import { ForYou } from "@/components/ForYou";
 import { AdSlot } from "@/components/AdSlot";
-import { rankArticles, visibleArticles } from "@/lib/ranking";
+import { rankArticles, pickTopStory, visibleArticles } from "@/lib/ranking";
+import type { Article, Update } from "@/lib/types";
+
+// גיבוי ל"עדכונים חיים": בשעה שקטה (המנוע לא ייצר עדכון חדש כבר זמן מה, וה-TTL
+// ניקה את הישנים) גוזרים עדכונים מהכתבות העדכניות עצמן כדי שהפאנל לא יהיה ריק.
+function fallbackUpdates(articles: Article[]): Update[] {
+  return articles.slice(0, 12).map((a) => ({
+    id: `art-${a.id}`,
+    category: a.category,
+    text: a.subtitle?.trim() || a.headline,
+    createdAt: a.publishedAt,
+  }));
+}
 
 // דינמי: מרונדר מהאחסון החי בכל בקשה, כך שכתבות חדשות מהמנוע מופיעות מיד.
 // (ISR/revalidate לא הציג תוכן חי באמינות בפריסת standalone, ולכן עברנו לדינמי.)
@@ -48,11 +60,15 @@ export default async function HomePage() {
   const articles = visibleArticles(allArticles);
   const ranked = rankArticles(articles);
 
-  // "סיפור השעה" - הכתבה החשובה ביותר בשעה האחרונה (ראש הדירוג המאוחד).
-  const mainStory = ranked[0];
+  // "סיפור השעה" - ההתפתחות העדכנית ביותר מבין הסיפורים החזקים באשכול העדכני
+  // (ראה pickTopStory) - לא סתם ראש דלי-השעה המוחלט.
+  const mainStory = pickTopStory(articles);
 
   const usedIds = new Set([mainStory?.id]);
   const latest = ranked.filter((a) => !usedIds.has(a.id)).slice(0, 10);
+
+  // "עדכונים חיים": העדכונים האמיתיים אם יש, אחרת גיבוי מהכתבות העדכניות.
+  const displayUpdates = updates.length > 0 ? updates : fallbackUpdates(ranked);
 
   // מאגר ל"המלצות לקריאה": רחב (עד 24) כדי שיישאר מספיק אחרי סינון הנקראו
   // וערבוב יומי בצד הלקוח. ברירת מחדל עד שנצבר פרופיל עניין/היסטוריית קריאה.
@@ -71,7 +87,7 @@ export default async function HomePage() {
           </div>
 
           <aside className="lg:w-[235px] lg:shrink-0">
-            <HourlyUpdates updates={updates} />
+            <HourlyUpdates updates={displayUpdates} />
           </aside>
         </section>
       )}
@@ -93,12 +109,12 @@ export default async function HomePage() {
       {/* בלוקים לפי קטגוריה */}
       {CATEGORY_ORDER.map((cat) => {
         const c = CATEGORIES[cat];
-        const items = rankArticles(
-          articles.filter((a) => a.category === cat),
-        ).slice(0, 9);
-        if (items.length === 0) return null;
-        const blockLead = items[0];
-        const blockRest = items.slice(1);
+        const catArticles = articles.filter((a) => a.category === cat);
+        const blockLead = pickTopStory(catArticles);
+        if (!blockLead) return null;
+        const blockRest = rankArticles(catArticles)
+          .filter((a) => a.id !== blockLead.id)
+          .slice(0, 8);
         return (
           <section key={cat} className="mb-10">
             <SectionHeading bar={c.bar} href={`/category/${c.slug}`}>

@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // רצועת תוצאות חיות קומפקטית עם חיצים לגלילה (סליידר ידני, ללא אנימציה).
-// כרגע נתוני דוגמה - בשלב הבא נחבר מקור תוצאות אמיתי (API).
+// נתונים אמיתיים מ-/api/scores (ESPN + balldontlie), מתרעננים כל דקה. אם אין
+// משחקים חיים/סיומים אחרונים - הרצועה מוסתרת לגמרי.
 interface Game {
   league: string;
   home: string;
@@ -13,14 +14,6 @@ interface Game {
   status: string;
   live?: boolean;
 }
-
-const SAMPLE_GAMES: Game[] = [
-  { league: "NBA", home: "פורטלנד", away: "דאלאס", hs: "112", as: "108", status: "גמר" },
-  { league: "יורוליג", home: "מכבי ת\"א", away: "אולימפיאקוס", hs: "78", as: "74", status: "רבע 4", live: true },
-  { league: "ליגת העל", home: "הפועל ת\"א", away: "מכבי חיפה", hs: "1", as: "1", status: "מחצית", live: true },
-  { league: "NBA", home: "בוסטון", away: "מיאמי", hs: "96", as: "91", status: "רבע 3", live: true },
-  { league: "פרמייר ליג", home: "ארסנל", away: "צ'לסי", hs: "2", as: "0", status: "גמר" },
-];
 
 function Arrow({
   dir,
@@ -50,10 +43,31 @@ function Arrow({
 
 export function LiveScores() {
   const ref = useRef<HTMLDivElement>(null);
+  const [games, setGames] = useState<Game[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const load = () =>
+      fetch("/api/scores")
+        .then((r) => (r.ok ? r.json() : { games: [] }))
+        .then((d) => {
+          if (active) setGames(Array.isArray(d.games) ? d.games : []);
+        })
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 60_000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, []);
 
   const scroll = (delta: number) => {
     ref.current?.scrollBy({ left: delta, behavior: "smooth" });
   };
+
+  // אין משחקים חיים/אחרונים - לא מציגים רצועה כלל (עדיף על נתוני דמה).
+  if (games.length === 0) return null;
 
   return (
     <div className="hidden items-center gap-0.5 md:flex">
@@ -63,7 +77,7 @@ export function LiveScores() {
         ref={ref}
         className="flex w-[230px] snap-x gap-1.5 overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {SAMPLE_GAMES.map((g, i) => (
+        {games.map((g, i) => (
           <div
             key={i}
             className="flex shrink-0 snap-start items-center gap-1.5 whitespace-nowrap rounded bg-white/10 px-2 py-1 text-[11px] leading-none text-white"
@@ -72,9 +86,11 @@ export function LiveScores() {
               <span className="h-1.5 w-1.5 animate-live rounded-full bg-white" />
             )}
             <span className="font-bold">{g.home}</span>
-            <span className="font-extrabold">
-              {g.hs}:{g.as}
-            </span>
+            {(g.hs || g.as) && (
+              <span className="font-extrabold">
+                {g.hs}:{g.as}
+              </span>
+            )}
             <span className="font-bold">{g.away}</span>
             <span className="text-[10px] text-white/60">{g.status}</span>
           </div>
